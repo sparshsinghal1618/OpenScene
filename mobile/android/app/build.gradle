@@ -1,0 +1,39 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'app.openscene'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'app.openscene'
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName '1.0.0'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    /* The whole web app is the payload; keep it byte-for-byte identical to the
+       desktop build. sync-assets.ps1 populates this directory. */
+    sourceSets {
+        main {
+            assets.srcDirs = ['src/main/assets']
+        }
+    }
+}
+
+/* No third-party dependencies: the shell is WebView + SAF + org.json. */
+dependencies { }

@@ -1,0 +1,369 @@
+# OpenScene
+
+**A free, open-source, professional non-linear video editor — for Windows, Android and iOS.**
+
+OpenScene is a complete editor: a multi-track timeline, a real compositor, **164
+transitions**, **136 effects**, keyframing, titling, a mastering audio bus and a
+frame-exact H.264/AAC exporter. Everything runs on your own machine — no cloud, no
+accounts, no telemetry, no runtime dependencies.
+
+Built with **zero third-party runtime libraries**. The timeline, the compositor, the
+effects, the transitions, the titler, the audio engine, the MP4 (ISO-BMFF) muxer and the
+entire interface are written from scratch and run directly on the web engine that already
+ships with the operating system.
+
+<p align="center">
+  <img src="icons/icon-192.png" width="128" alt="OpenScene logo">
+</p>
+
+---
+
+## Get it
+
+### Windows (the real desktop app)
+
+Double-click the build script, or run the two steps by hand:
+
+```bat
+Build-Installer.bat
+```
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Build-WindowsApp.ps1 -Clean
+& "C:\Program Files (x86)\NSIS\makensis.exe" .\tools\OpenScene.nsi
+```
+
+This produces a genuine native Windows executable — no Node, no Electron, no runtime to
+install:
+
+| Path | What it is |
+| --- | --- |
+| `Dist\OpenScene\OpenScene.exe` | The editor (WebView2 host, ~71 KB) |
+| `Dist\OpenScene-Setup.exe` | NSIS installer — Start-menu and desktop shortcuts, uninstaller |
+| `Dist\OpenScene-portable.zip` | The same app as a portable folder; unzip and run |
+
+Requires Windows 10/11 with the WebView2 runtime (present on every up-to-date machine).
+NSIS is only needed for the installer — without it the app itself still builds.
+
+To produce the per-platform folders and the portable zip in the same pass:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\Build-AllPlatforms.ps1
+```
+
+### Android and iOS
+
+OpenScene ships the *same editor* on mobile inside thin native shells that add real file
+dialogs and real filesystem access.
+
+```powershell
+# Android: sync the web app into the shell, then build
+powershell -ExecutionPolicy Bypass -File mobile\android\sync-assets.ps1
+cd mobile\android ; gradlew.bat assembleDebug
+```
+
+```sh
+# iOS: sync, then build in Xcode
+sh mobile/ios/sync-assets.sh
+```
+
+Full requirements, the Xcode project setup and the host-bridge contract are documented in
+**[mobile/README.md](mobile/README.md)**.
+
+### Browser / installable PWA
+
+`index.html` runs straight from disk or from any static host. Served over `http(s)` it
+also installs as a PWA (manifest, icons and a service worker are included), with
+`localStorage` autosave and IndexedDB media storage.
+
+```powershell
+python -m http.server 8080        # then open http://127.0.0.1:8080/
+```
+
+### Verify it
+
+```powershell
+Dist\OpenScene\OpenScene.exe --selftest --out=selftest.json
+```
+
+Or from inside the app: **Help ▸ Run self-test**.
+
+---
+
+## Feature tour
+
+### Editing
+- **Multi-track timeline** (any number of video and audio tracks) drawn on a virtualised
+  canvas — only the visible window is painted, so huge projects stay smooth.
+- **Separate video and audio tracks.** Drop an audio file onto an audio track
+  (`Ctrl+Shift+A` adds one), or right-click a clip and *Detach audio* to slide its sound
+  onto its own track, exactly as OpenShot users expect.
+- Drag to move, drag the edges to trim, drag with **Alt** to duplicate, drag with **Ctrl**
+  to insert-ripple; snapping with a live snap line and magnet zones.
+- **Roll**, **slip** and **slide** edits, plus ripple-delete, lift, split, freeze frame,
+  reverse and per-clip speed.
+- **JKL** shuttle, frame stepping, edit-point jumping, in/out work area, markers.
+- **Clip grouping** — group clips so they move, trim and delete together.
+- Full undo/redo across every edit: the whole stack is a command list, and even a
+  multi-clip gesture commits as a single undo step.
+- Track header controls: mute, solo, lock, hide, height, delete.
+
+### Compositing
+- A real compositor renders any project frame at full project resolution — the same code
+  path powers the preview, the still export and the movie export, so **what you see is
+  what you get**.
+- **17 blend modes** per clip (Multiply, Screen, Overlay, Color Dodge/Burn,
+  Hard/Soft Light, Difference, Exclusion, Add, Hue, Saturation, Color, Luminosity…).
+- **Adjustment layers** that grade every track beneath them, instead of one clip at a
+  time.
+- Per-clip **transform** (position, scale, rotation), opacity, crop, speed and volume.
+- **Keyframes** on any numeric parameter, edited from the inspector with diamonds that
+  follow the playhead.
+
+### Effects — 123 video, 13 audio
+Grouped in the library, each with its own controls, each keyframeable:
+
+| Group | What you get |
+| --- | --- |
+| **Color & Tone** (34) | Brightness, Contrast, Saturation, Vibrance, Hue Rotate, Colour Temperature, White Balance, Levels, Auto Levels, Curves, Gamma, Exposure, Black & White, Sepia, Invert, Duotone, Colour Grade, Colour Balance, Channel Mixer, Colourise, Gradient Map, Selective Colour, Bleach Bypass, Split Toning, Infrared, plus **nine film-look presets** — Technicolor, Cross Process, Lomo, Kodachrome, Polaroid, Vaporwave, Cyberpunk, Film Noir, Green Teal |
+| **Blur & Sharpen** (12) | Blur, Box Blur, Zoom Blur, Motion Blur, Directional Blur, Radial Blur, Sharpen, Unsharp Mask, High Pass, Clarity, Soft Focus, Noise Reduction |
+| **Stylize** (33) | Emboss, Edge Detect, Threshold, Posterize, Solarize, Mosaic, Halftone, Ordered Dither, Oil Paint, Pencil Sketch, Crosshatch, Cartoon, Watercolour, Newsprint, Blueprint, Night Vision, Dot Matrix, Palette, CRT Screen, Halation, Glow, Film Grain, Scan Lines, VHS, Old Film, Light Leak, Glitch, Neon Glow, Comic Book, Thermal Camera, X-Ray, Stained Glass, Vignette |
+| **Distort** (18) | Mirror, Wave, Swirl, Bulge / Pinch, Ripple, Chromatic Aberration, Kaleidoscope, Extrude, Skew, Tile Grid, Stretch, Barrel / Pincushion, Sphere, Perspective, Vortex, Polar Coordinates, Noise Displace, Fracture |
+| **Keying** (4) | Colour Key, Chroma Key (Green Screen), Luma Key, Spill Suppression |
+| **Render** (22) | Letterbox, Fade In / Out, Border, Drop Shadow, Blurred Background, Picture in Picture, Lens Flare, Timecode Burn-in, Bokeh Lights, Solid Colour, Gradient Overlay, Grid Overlay, Safe Area, Light Rays, Star Filter, Rain, Snow, Dust Motes, Fire, Clouds, Smoke, Sparkle |
+| **Audio** (13) | Volume, Audio Boost / Cut, Audio Fade, Volume Ramp, Swell, Tremolo, Stereo Pan, Stutter Gate, Pumping Duck, Level Envelope, Auto Pan, Mono Fold, Level Window |
+
+Filter-based effects (colour, blur) are collapsed into a single canvas filter pass so a
+long stack still plays in real time; the rest are handwritten pixel passes. The edge-based
+looks (Cartoon, Watercolour, Blueprint) share one precomputed luminance plane, so their
+neighbourhood maths costs a single array read per sample instead of three multiplies.
+
+### Transitions — 164 types
+A transition is created the OpenShot way: overlap two clips on the same video track, then
+drag the triangle to change its length. They are grouped in the library with a search box:
+
+- **Dissolve** (40) — cross, blur, checkerboard, noise, hexagon, block, film, the blend-mode
+  dissolves (screen, overlay, darken, colour burn, hue…), ordered dither, halftone, line,
+  crosshatch, dot, scanline, domino, fly-in, cells and particle dissolves.
+- **Wipe** (44) — left / right / up / down, feathered, circle (iris), diamond, star, box,
+  luma, ripple, barn doors, diagonal, curtain, pinwheel, zipper, puzzle, corner sweep, the
+  polygon set (triangle through decagon), burst, sunburst, heart, arrow, keyhole, cross,
+  hourglass, spiral, plus radial, vertical and wave blinds.
+- **Slide** (37) — cover, push, reveal, squeeze, roll, the diagonals, barn doors, cube turn,
+  flip horizontal / vertical, swing door, whip pan and fold over.
+- **Zoom** (13) — zoom in / out, cross zoom, zoom twist, radial bloom, zoom blur dissolve,
+  punch zoom, dive, rotate, explode, implode, iris and whip zoom.
+- **Stylised** (26) — spin, page turn, film burn, matrix, clock sweep, shattered glass, strip
+  slide, glitch cut, VHS cut, datamosh, CRT power on, liquid, tunnel, spotlight, prism, ink
+  spill, water ripple, neon, sketch, fracture, light leak, film strip and heartbeat.
+- **Flash** (4) — white, black, colour and strobe flashes.
+
+Every registered transition is machine-verified to be **exactly A at `p=0` and exactly B
+at `p=1`**, and to leave no semi-transparent hole mid-move — so a clip on a lower track can
+never bleed through the middle of a blend. Large groups of variants share one tested
+renderer through a family table, so a new look never ships untested.
+
+### Titling
+Six title presets (Main Title, Subtitle, Lower Third, Caption, End Credits, Callout),
+17 fonts, nine in/out animations (fade, slides, zoom, typewriter, blur), fill and stroke
+colour, alignment, tracking, line height, shadow and background box.
+
+### Audio
+- Per-clip volume with keyframes, fade in/out handles, and a **per-clip 3-band EQ**
+  (low / mid / high).
+- **Mastering bus** on the output: 3-band EQ → compressor → brickwall limiter, so a mixed
+  project arrives at the export at a consistent, sane level.
+- **Normalise audio** on any selection.
+- Master volume and live L/R level meters, plus a floating **scopes** window
+  (waveform, RGB parade, vectorscope, histogram) that follows the playhead.
+- Offline audio mixdown used by the exporter, so exports match the timeline exactly.
+
+### Export
+Three engines, every result verified before you're told it worked:
+
+| Engine | How it works | Output |
+| --- | --- | --- |
+| **Precise** | WebCodecs hardware/software encode, frame-exact seek-based rendering, written through OpenScene's own MP4 muxer | MP4 (H.264 + AAC) |
+| **Fast / Realtime** | Realtime capture of the live preview through `MediaRecorder` | MP4 where supported, otherwise WebM/VP9 |
+| **Audio** | Offline `OfflineAudioContext` mixdown | WAV or M4A (AAC) |
+
+Fourteen resolution presets — **16K UHD (8640p)**, **8K UHD and 8K DCI** in WebM/VP9, 4K UHD
+down to SD, vertical and square social formats, and audio-only WAV/M4A — plus quality steps,
+custom bitrate, hardware-encode toggle, and three export **ranges**: whole project, work
+area, or a custom in/out span.
+
+No web engine can encode 16K video, so OpenScene routes by size instead of pretending:
+H.264 in MP4 up to 4K, VP9 in WebM up to 8K, and at 16K it delivers **PNG stills and a PNG
+image-sequence ZIP**. Rendering a 16K frame works; encoding one as a movie is beyond the
+platform, and OpenScene says so rather than failing halfway.
+
+### Projects
+- **Native Open/Save dialogs** in every desktop build (Windows host, Android SAF, iOS
+  document picker).
+- Projects are `.osceneproj` files; imported media lives in IndexedDB, so reopening a
+  project restores everything automatically. If a file is gone, OpenScene offers to
+  **relink** it.
+- **Autosave** every 45 seconds with a recovery prompt on the next launch.
+- Recent-projects list.
+
+### Importing media — every format the engine can meet
+The import dialog, drag-and-drop and the mobile document pickers all accept the same
+**221 extensions: 72 video, 63 audio, 86 image** — MP4/MOV/MKV/WebM/AVI/MPEG/OGV/FLV/M4V
+and friends; MP3/AAC/M4A/WAV/FLAC/OGG/Opus/WMA/AIFF and friends; JPEG/PNG/WebP/GIF/BMP/
+TIFF/HEIC/SVG/AVIF and friends, including RAW-ish and oddball containers.
+
+Two things make that promise real rather than a long `accept` attribute:
+
+- **Unknown or extension-less files are sniffed, not rejected.** OpenScene reads the first
+  4 KB and identifies the container by magic number, so a file named `clip` or `.bin` is
+  still classified correctly and imported.
+- **A file that this build cannot decode is still kept.** If the container is known but the
+  codec inside it is not supported by the web engine on this machine (a common case with
+  HEVC or certain AVI/ProRes variants), OpenScene imports the file anyway, badges it
+  **NO CODEC** in the media bin, explains why, and refuses to put it on the timeline rather
+  than silently dropping it. Switch machines or re-wrap the file and it plays — nothing was
+  ever lost.
+
+The format tables live in one place, `js/media.js`, and the native Windows host mirrors
+them, so the picker, the drop zone and the OS file dialog can never disagree.
+
+---
+
+## Keyboard shortcuts
+
+Press **?** or open *Help ▸ Keyboard shortcuts* for the full list. Highlights:
+
+| Keys | Action |
+| --- | --- |
+| `Space` | Play / pause |
+| `J` `K` `L` | Shuttle back / stop / shuttle forward (repeated presses speed up) |
+| `←` `→` | Step one frame |
+| `Shift+←` / `Shift+→` | Jump one second |
+| `Home` / `End`, `Page Up` / `Page Down` | Start / end, previous / next edit point |
+| `S` / `Shift+S` | Split at playhead / split everything |
+| `Delete` / `Shift+Delete` | Lift / ripple delete |
+| `Ctrl+X` `Ctrl+C` `Ctrl+V` `Ctrl+D` | Cut, copy, paste, duplicate |
+| `Ctrl+Z` / `Ctrl+Y` | Undo / redo |
+| `Ctrl+I` | Import media |
+| `Ctrl+S` / `Ctrl+O` | Save / open project |
+| `Ctrl+E` / `Ctrl+Shift+E` | Export / export still frame |
+| `M` | Add a marker |
+| `I` / `O` | Set in / out point |
+| `N` / `R` | Toggle snapping / ripple editing |
+| `Alt+↑` / `Alt+↓` | Move the selection a track up / down |
+| `+` `-` `Ctrl+0` | Zoom in / out / fit |
+| `F11` | Fullscreen preview |
+| `F3` | Performance stats overlay |
+
+---
+
+## Architecture
+
+```
+index.html              classic <script> tags, no bundler, no build step
+css/app.css             the whole dark theme
+css/mobile.css          the sub-900 px single-pane layout
+js/                     the engine — plain ES2020, one global OS namespace
+  util.js               helpers, DOM builder, Emitter, FrameMeter, onActivate
+  timebase.js           integer-frame timebase + rational fps + timecode
+  model.js              project data model (assets, tracks, clips, effects, keyframes,
+                        blend modes, adjustment layers, groups)
+  commands.js           undo/redo command stack
+  effects.js            136 effects (123 video, 13 audio) + the filter/pixel/draw appliers
+  transitions.js        164 transition renderers (shared-family dispatch table)
+  titles.js             titler presets + renderers
+  renderer.js           the compositor
+  media.js              IndexedDB store, element pools, thumbnails, waveform peaks
+  player.js             transport, master frame clock, WebAudio graph, mastering bus, meters
+  scopes.js             floating waveform / parade / vectorscope / histogram
+  wav.js                16-bit PCM WAV encoder
+  mp4muxer.js           hand-written ISO-BMFF (MP4) muxer + codec config
+  export.js             the three export engines + verification
+  timeline.js           the canvas timeline (largest module)
+  bin.js                project media bin
+  library.js            effects + transitions pickers and thumbnails
+  properties.js         the inspector
+  dialogs.js            modals, context menus, toasts, export dialog
+  shortcuts.js          the keymap
+  persist.js            save/open/autosave/recovery/relink — consumes window.openscene
+  mobile.js             the sub-900 px single-pane mobile layout
+  selftest.js           the end-to-end acceptance suite (67 checks)
+  app.js                the application shell (menus, transport, wiring)
+native/                 the Windows host
+  OpenScene.cs          WebView2 window, native dialogs, --selftest CLI
+  host-bridge.js        window.openscene over chrome.webview RPC
+  webview2/             the vendored WebView2 SDK used to build the host
+mobile/                 the Android and iOS shells  (see mobile/README.md)
+  host-bridge-mobile.js shared mobile bridge — the same window.openscene contract
+  android/              Gradle project, WebView + loopback server + SAF dialogs
+  ios/                  Swift sources, WKWebView + loopback server + document pickers
+icons/                  generated logo (favicon, PWA, maskable)
+resources/              generated app icon (.ico / .png), logo wordmark, installer art
+tools/OpenScene.nsi     NSIS installer script
+tools/Build-AllPlatforms.ps1  publishes the Windows/Android/iOS folders into Downloads
+Build-WindowsApp.ps1    builds Dist\OpenScene\OpenScene.exe
+Build-Installer.bat     one click: the app plus the installer
+Run-OpenScene.bat       smart launcher (the built app, else Edge app mode)
+OpenScene-EdgeApp.cmd   zero-install Edge app-mode launcher
+```
+
+**No build step for the app itself.** The same `index.html` is what the Windows host, both
+mobile shells and a plain browser all load — that is why one editor can ship on three
+platforms with nothing to install.
+
+The logo is drawn by a stdlib-only script (System.Drawing): a rounded navy gradient badge
+with a playhead-triangle mark and filmstrip sprocket holes, rendered at every size the
+platforms need, including a maskable Android adaptive icon.
+
+---
+
+## Self-test
+
+OpenScene ships with an end-to-end acceptance suite that synthesises its own media and
+exercises the whole engine: it generates a video (canvas → `MediaRecorder`), an audio tone
+(WAV) and an image (`toBlob`), imports them into the real media store, builds a real
+project (a title, a video clip with a dissolve transition, effect stacks and scale
+keyframes, an image clip and an audio clip with fades), renders every frame, verifies the
+transition actually blends, runs the offline audio mixdown, encodes a WAV, performs a
+**real frame-exact MP4 export and an M4A export**, re-verifies the bytes, exports a still,
+checks the model's validation negative cases, and then — for regression safety — applies
+**every registered effect** and draws **every registered transition** at `p=0`, `p=0.5`
+and `p=1` to prove none of them throws and none of them fails to reach the incoming clip.
+
+That last pair of checks is what keeps this editor's effect and transition libraries
+honest. It is currently **67 passed, 0 failed**.
+
+Run it from **Help ▸ Run self-test…**, launch with `#selftest` appended to the URL
+(`index.html#selftest`), or use the CLI form shown above.
+
+---
+
+## Requirements
+
+- **Windows 10 or 11** (x64) with the WebView2 runtime — preinstalled on current machines.
+- **Android 7.0+** to build the Android shell (JDK 17 + Android SDK 34).
+- **macOS with Xcode 15+** to build the iOS shell.
+- Hardware H.264 encoding requires a GPU/driver that exposes it to the web engine;
+  OpenScene falls back to software encoding, and then to the realtime engine,
+  automatically.
+
+---
+
+## Privacy
+
+OpenScene never makes a network request. (The Android and iOS shells open a loopback
+socket on `127.0.0.1` purely to serve the app's own files to its own WebView; nothing
+leaves the device.) Media is read from your disk, decoded in-process, and stored locally
+so projects reopen instantly. Nothing is uploaded, ever.
+
+---
+
+## Licence
+
+MIT — see [LICENSE](LICENSE).
+
+OpenScene contains **no third-party runtime code** on any platform. The Windows host is
+built against the WebView2 SDK (vendored under `native/webview2/` for offline builds);
+the WebView2 *runtime* it drives is a Windows component, not something OpenScene ships.
+The Android and iOS shells compile against the platform SDKs only — no AndroidX, no
+Compose, no Swift packages, no CocoaPods.

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1420 512" width="1420" height="512" role="img" aria-label="OpenScene">
+  <title>OpenScene</title>
+  <defs>
+    <linearGradient id="osBadge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#26314a"/><stop offset="1" stop-color="#101420"/>
+    </linearGradient>
+    <linearGradient id="osAccent" x1="0.1" y1="0" x2="1" y2="0.6">
+      <stop offset="0" stop-color="#4a9eff"/><stop offset="1" stop-color="#8f7bff"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(48 96) scale(0.625)">
+    <rect x="0" y="0" width="512" height="512" rx="112" fill="url(#osBadge)"/>
+    <rect x="103" y="158" width="16" height="196" rx="8" fill="url(#osAccent)"/>
+    <rect x="341" y="158" width="68" height="34" rx="17" fill="#ffffff" fill-opacity="0.92"/>
+    <rect x="341" y="239" width="46" height="34" rx="17" fill="#ffffff" fill-opacity="0.55"/>
+    <rect x="341" y="320" width="58" height="34" rx="17" fill="#ffffff" fill-opacity="0.32"/>
+    <path d="M 160.00 183.96 L 160.00 328.04 L 284.97 256.00 Z" fill="url(#osAccent)" stroke="url(#osAccent)" stroke-width="30" stroke-linejoin="round"/>
+  </g>
+  <g font-family="Segoe UI, Inter, system-ui, Helvetica, Arial, sans-serif" font-size="188" font-weight="600" letter-spacing="-3">
+    <text x="400" y="286" fill="#f2f6fb">Open<tspan fill="url(#osAccent)">Scene</tspan></text>
+  </g>
+  <text x="404" y="354" font-family="Segoe UI, Inter, system-ui, Helvetica, Arial, sans-serif" font-size="42" letter-spacing="7" fill="#8b93a3">VIDEO EDITOR</text>
+</svg>

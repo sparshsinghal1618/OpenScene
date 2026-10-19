@@ -1,0 +1,194 @@
+/* OpenScene — mobile.css
+   Touch-first layout for phones and small tablets, plus iOS safe-area handling.
+   Loaded after app.css, so everything here wins at narrow widths. The desktop
+   layout is untouched: every rule sits behind the same width media query. */
+
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --mbar-h: 50px;
+}
+
+/* The mobile pane bar exists in the DOM on every platform but is only shown
+   (and only takes a grid row) on narrow screens. */
+#mobileBar { display: none; }
+
+/* Nothing in the editor should rubber-band the whole page. */
+html, body { overscroll-behavior: none; }
+.tl-canvas { touch-action: none; }
+.tl-canvas, .tl-head, .tl-head-name { -webkit-touch-callout: none; }
+
+@media (max-width: 900px) {
+
+  /* ---------- shell ---------- */
+
+  #app {
+    --mbar-h: 50px;
+    --tl-h: 32vh;
+    grid-template-rows:
+      calc(var(--menubar-h) + var(--sat))
+      minmax(0, 1fr) 6px var(--tl-h) var(--mbar-h) calc(var(--status-h) + var(--sab));
+    height: 100vh;
+    height: 100dvh;
+  }
+  /* one pane at a time in the middle band */
+  #main {
+    grid-template-columns: minmax(0, 1fr);
+    padding-left: var(--sal);
+    padding-right: var(--sar);
+  }
+  #dockLeft, #center, #propsPanel { grid-column: 1; grid-row: 1; display: none; }
+  #splitLeft, #splitRight { display: none; }
+  #app[data-pane="preview"] #center,
+  #app[data-pane="library"] #dockLeft,
+  #app[data-pane="props"] #propsPanel { display: flex; }
+  #dockLeft, #propsPanel { border: 0; }
+
+  /* ---------- mobile pane bar ---------- */
+
+  #mobileBar {
+    display: flex;
+    align-items: stretch;
+    gap: 2px;
+    padding: 4px calc(4px + var(--sar)) 4px calc(4px + var(--sal));
+    background: var(--panel-2);
+    border-top: 1px solid var(--line);
+    min-width: 0;
+  }
+  .mbar-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-s);
+    color: var(--text-2);
+    font: inherit;
+    font-size: var(--fs-xs);
+    letter-spacing: 0.2px;
+    padding: 4px 2px;
+    cursor: pointer;
+  }
+  .mbar-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .mbar-btn.on { background: var(--accent-soft); border-color: var(--accent); color: #fff; }
+  .mbar-btn:active { background: var(--panel-3); }
+  .mbar-btn.playing svg { stroke: var(--ok); }
+
+  /* ---------- menu bar ---------- */
+
+  #menubar {
+    gap: 4px;
+    padding: 0 calc(6px + var(--sar)) 0 calc(6px + var(--sal));
+    overflow: hidden;
+  }
+  .brand { padding-right: 6px; }
+  .brand-name, .brand-ver { display: none; }
+  .menus {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .menus::-webkit-scrollbar { display: none; }
+  .menu-btn { padding: 8px 10px; min-height: 36px; flex: 0 0 auto; }
+  .doc-title { display: none; }
+  .toolbar { flex: 0 0 auto; gap: 4px; }
+  .toolbar .btn { padding: 7px 9px; min-height: 34px; font-size: var(--fs-m); }
+  #tbImport, #tbSave, #tbExport { padding: 7px 8px; }
+
+  /* ---------- preview + transport ---------- */
+
+  #previewControls { padding: 4px 6px; }
+  .transport-row { gap: 7px; }
+  .tbtn { min-width: 38px; min-height: 36px; }
+  .tbtn svg { width: 17px; height: 17px; }
+  .tbtn-play { min-width: 50px; }
+  .tc-input { width: 104px; font-size: var(--fs-m); }
+  .vol-range { width: 74px; }
+  .meter { width: 46px; }
+  .preview-badge { font-size: var(--fs-xs); padding: 2px 7px; }
+
+  /* ---------- timeline ---------- */
+
+  .tl-toolbar {
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 5px 7px;
+  }
+  .tl-toolbar::-webkit-scrollbar { display: none; }
+  .tl-btn { flex: 0 0 auto; padding: 7px 10px; min-height: 34px; }
+  .tl-headers { flex-basis: 118px; }
+  .tl-head { gap: 3px; }
+  .tl-head-name { font-size: var(--fs-xs); }
+  .tl-mini { min-width: 24px; min-height: 22px; font-size: var(--fs-xs); padding: 2px 5px; }
+  /* Phones are too narrow for six chips on one row; the move and delete
+     actions stay available from the long-press track context menu. */
+  .tl-head-btns .tl-move, .tl-head-btns .tl-del { display: none; }
+  .tl-head-size { height: 8px; }
+
+  /* ---------- dock + properties ---------- */
+
+  .dock-tabs { min-height: 40px; }
+  .dock-tab { font-size: var(--fs-m); }
+  .lib-cat { padding: 5px 9px; min-height: 30px; }
+  .lib-item { padding: 6px; }
+  .lib-thumb canvas { width: 56px; height: 32px; }
+  .bin-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+  .prop-row, .prop-kv { min-height: 30px; }
+  .prop-inputs input, .mini-select, .text-input { min-height: 32px; }
+
+  /* ---------- overlays ---------- */
+
+  .modal-layer { padding: calc(8px + var(--sat)) 8px calc(8px + var(--sab)); align-items: flex-start; }
+  .modal { width: min(96vw, 720px); max-height: 92vh; }
+  .modal.wide { width: 96vw; }
+  .modal.small { width: min(94vw, 420px); }
+  .modal-body { padding: 12px; }
+  .export-dialog { grid-template-columns: 1fr; gap: 12px; }
+  .export-left { max-height: none; }
+  .export-presets { flex-direction: row; }
+  .context-menu { max-width: 84vw; }
+  .context-item { padding: 11px 13px; }
+  .toast-layer {
+    left: calc(10px + var(--sal));
+    right: calc(10px + var(--sar));
+    bottom: calc(var(--mbar-h) + var(--sab) + 10px);
+  }
+  .toast { max-width: none; }
+  .form .prop-btnrow, .prop-btnrow { flex-wrap: wrap; }
+}
+
+/* Phones in portrait: keep the preview useful, give the timeline more room. */
+@media (max-width: 560px) {
+  #app { --tl-h: 34vh; }
+  .tl-headers { flex-basis: 104px; }
+  /* The header column is only 104px here. Two chips plus the height slider fit
+     on one row; Lock joins the other actions in the track context menu. */
+  .tl-head-btns .tl-lock { display: none; }
+  .dock-tab { font-size: var(--fs-s); padding: 0 6px; }
+}
+
+/* Landscape phones: the timeline should dominate. */
+@media (max-width: 900px) and (orientation: landscape) and (max-height: 560px) {
+  #app { --tl-h: 44vh; --mbar-h: 44px; }
+  .mbar-btn { flex-direction: row; gap: 6px; font-size: var(--fs-s); }
+  .mbar-btn svg { width: 17px; height: 17px; }
+}
+
+/* Timeline maximised (toggled from the mobile bar). */
+@media (max-width: 900px) {
+  #app.tl-max { --tl-h: 62vh; }
+  #app.tl-max #main { display: none; }
+  #app.tl-max #splitTimeline { display: none; }
+}

@@ -1,0 +1,681 @@
+/* OpenScene — dialogs.js
+   Modal dialogs (export, project settings, shortcuts, about, confirm/prompt),
+   plus themed context menus and toasts. */
+(() => {
+  'use strict';
+  const OS = (window.OS = window.OS || {});
+  const U = OS.util;
+  const { el, on, esc, clamp, fmtBytes } = U;
+  const M = () => OS.model;
+
+  class Dialogs {
+    constructor(app) {
+      this.app = app;
+      this.layer = el('div.modal-layer');
+      this.ctxLayer = el('div.context-layer');
+      this.toasts = el('div.toast-layer');
+      document.body.append(this.layer, this.ctxLayer, this.toasts);
+      on(window, 'mousedown', (e) => { if (!this.ctxLayer.contains(e.target)) this.closeContextMenu(); }, true);
+      on(window, 'blur', () => this.closeContextMenu());
+      on(document, 'keydown', (e) => { if (e.key === 'Escape') this.closeContextMenu(); });
+    }
+
+    /* ---------- generic modal ---------- */
+
+    open(title, contentNode, opts = {}) {
+      const box = el('div.modal' + (opts.wide ? '.wide' : '') + (opts.small ? '.small' : ''));
+      const head = el('div.modal-head');
+      head.append(el('div.modal-title', { text: title }));
+      const close = el('button.modal-close', { title: 'Close' });
+      close.innerHTML = '<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true"><path d="M2.6 2.6l6.8 6.8M9.4 2.6l-6.8 6.8" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>';
+      head.appendChild(close);
+      const body = el('div.modal-body');
+      body.appendChild(contentNode);
+      const foot = el('div.modal-foot');
+      box.append(head, body, foot);
+      this.layer.innerHTML = '';
+      this.layer.appendChild(box);
+      this.layer.classList.add('open');
+      const api = {
+        box, body, foot, close: () => this.close(),
+        onClose: () => {},
+      };
+      on(close, 'click', () => this.close());
+      if (opts.dismissable !== false) on(this.layer, 'mousedown', (e) => { if (e.target === this.layer) this.close(); });
+      this._current = api;
+      return api;
+    }
+
+    close() {
+      const api = this._current;
+      this._current = null;
+      this.layer.classList.remove('open');
+      this.layer.innerHTML = '';
+      if (api) { try { api.onClose(); } catch (e) {} }
+    }
+
+    button(label, fn, cls = '') {
+      const b = el('button.btn' + (cls ? '.' + cls : ''), { text: label });
+      on(b, 'click', fn);
+      return b;
+    }
+
+    confirm(title, message, { danger = false, okLabel = 'OK', cancelLabel = 'Cancel' } = {}) {
+      return new Promise((resolve) => {
+        const content = el('div.modal-message', { text: message });
+        const api = this.open(title, content, { small: true });
+        const cancel = this.button(cancelLabel, () => { api.close(); resolve(false); });
+        const ok = this.button(okLabel, () => { api.close(); resolve(true); }, danger ? 'danger' : 'primary');
+        api.foot.append(el('span.spacer'), cancel, ok);
+        api.onClose = () => resolve(false);
+        setTimeout(() => ok.focus(), 0);
+      });
+    }
+
+    prompt(title, message, value = '', { okLabel = 'OK' } = {}) {
+      return new Promise((resolve) => {
+        const input = el('input.text-input', { value });
+        const content = el('div', {}, [el('div.modal-message', { text: message }), input]);
+        const api = this.open(title, content, { small: true });
+        const cancel = this.button('Cancel', () => { api.close(); resolve(null); });
+        const ok = this.button(okLabel, () => { const v = input.value; api.close(); resolve(v); }, 'primary');
+        api.foot.append(el('span.spacer'), cancel, ok);
+        api.onClose = () => resolve(null);
+        on(input, 'keydown', (e) => { if (e.key === 'Enter') { const v = input.value; api.close(); resolve(v); } });
+        setTimeout(() => { input.focus(); input.select(); }, 0);
+      });
+    }
+
+    /* ---------- context menus ---------- */
+
+    /* Leading glyph for a menu row: an SVG tick for checked rows, otherwise the
+       supplied text icon. Rendered as SVG so the UI stays free of emoji glyphs. */
+    _decorate(row, it) {
+      if (it.checked) {
+        const c = el('span.context-icon.context-check');
+        c.innerHTML = '<svg viewBox="0 0 10 10" width="9" height="9" aria-hidden="true">' +
+          '<path d="M1.4 5.3 3.8 7.7 8.6 2.3" stroke="currentColor" stroke-width="1.8" fill="none" ' +
+          'stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        row.appendChild(c);
+      } else if (it.icon) {
+        row.appendChild(el('span.context-icon', { text: it.icon }));
+      }
+    }
+
+    contextMenu(x, y, items) {
+      this.closeContextMenu();
+      const menu = el('div.context-menu');
+      for (const it of items) {
+        if (!it) continue;
+        if (it.sep) { menu.appendChild(el('div.context-sep')); continue; }
+        const row = el('div.context-item' + (it.danger ? '.danger' : '') + (it.disabled ? '.disabled' : ''));
+        this._decorate(row, it);
+        row.appendChild(el('span.context-label', { text: it.label }));
+        if (it.hint) row.appendChild(el('span.context-hint', { text: it.hint }));
+        if (it.submenu) {
+          row.appendChild(el('span.context-more', { text: '›' }));
+          on(row, 'mouseenter', () => this._openSubmenu(row, it.submenu));
+          on(row, 'click', (e) => { e.stopPropagation(); });
+        } else if (!it.disabled) {
+          on(row, 'mouseenter', () => this._closeSubmenus(menu));
+          on(row, 'click', (e) => { e.stopPropagation(); this.closeContextMenu(); it.action && it.action(); });
+        }
+        menu.appendChild(row);
+      }
+      this.ctxLayer.appendChild(menu);
+      const r = menu.getBoundingClientRect();
+      menu.style.left = Math.min(x, window.innerWidth - r.width - 6) + 'px';
+      menu.style.top = Math.min(y, window.innerHeight - r.height - 6) + 'px';
+      this.ctxLayer.classList.add('open');
+    }
+
+    _openSubmenu(row, items) {
+      this._closeSubmenus(row.parentElement);
+      const r = row.getBoundingClientRect();
+      const sub = el('div.context-menu.submenu');
+      for (const it of items) {
+        if (!it) continue;
+        if (it.sep) { sub.appendChild(el('div.context-sep')); continue; }
+        const item = el('div.context-item' + (it.danger ? '.danger' : ''));
+        this._decorate(item, it);
+        item.appendChild(el('span.context-label', { text: it.label }));
+        on(item, 'click', (e) => { e.stopPropagation(); this.closeContextMenu(); it.action && it.action(); });
+        sub.appendChild(item);
+      }
+      this.ctxLayer.appendChild(sub);
+      const sr = sub.getBoundingClientRect();
+      sub.style.left = Math.min(r.right + 2, window.innerWidth - sr.width - 6) + 'px';
+      sub.style.top = Math.min(r.top, window.innerHeight - sr.height - 6) + 'px';
+      sub.__parentRow = row;
+    }
+
+    _closeSubmenus(within) {
+      for (const s of [...this.ctxLayer.querySelectorAll('.submenu')]) {
+        if (!within || s.__parentRow === within || !within.contains(s.__parentRow)) s.remove();
+      }
+      // remove all submenus whose parent row isn't hovered any more
+      for (const s of [...this.ctxLayer.querySelectorAll('.submenu')]) s.remove();
+    }
+
+    closeContextMenu() {
+      this.ctxLayer.innerHTML = '';
+      this.ctxLayer.classList.remove('open');
+    }
+
+    /* ---------- toasts ---------- */
+
+    toast(message, kind = 'info', ms = 4200) {
+      const t = el('div.toast.' + kind);
+      t.appendChild(el('span.toast-msg', { text: message }));
+      const close = el('button.toast-close', { title: 'Dismiss' });
+      close.innerHTML = '<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2.6 2.6l6.8 6.8M9.4 2.6l-6.8 6.8" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>';
+      on(close, 'click', () => t.remove());
+      t.appendChild(close);
+      this.toasts.appendChild(t);
+      requestAnimationFrame(() => t.classList.add('in'));
+      setTimeout(() => { t.classList.remove('in'); setTimeout(() => t.remove(), 300); }, ms);
+      return t;
+    }
+
+    /* ---------- export dialog ---------- */
+
+    exportDialog() {
+      const app = this.app;
+      const p = app.project;
+      const dur = M().projectDuration(p);
+      const state = {
+        preset: 'youtube1080',
+        engine: 'precise',
+        quality: 'high',
+        container: 'mp4',
+        codec: 'h264',
+        width: p.width, height: p.height, fps: p.fps.rate,
+        videoBitrate: 8_000_000, audioBitrate: 192_000, audio: true, hardware: true,
+        rangeMode: 'all',
+        running: false,
+      };
+
+      const content = el('div.export-dialog');
+      const left = el('div.export-left');
+      const right = el('div.export-right');
+      content.append(left, right);
+
+      // preset list
+      const presetList = el('div.export-presets');
+      for (const pr of OS.export.PRESETS) {
+        const b = el('button.export-preset' + (pr.id === state.preset ? '.on' : ''), { text: pr.name });
+        on(b, 'click', () => {
+          state.preset = pr.id;
+          for (const ch of presetList.children) ch.classList.remove('on');
+          b.classList.add('on');
+          applyPreset(pr);
+          syncFields();
+        });
+        b.__preset = pr;
+        presetList.appendChild(b);
+      }
+      left.appendChild(el('div.export-group-title', { text: 'Preset' }));
+      left.appendChild(presetList);
+      const summary = el('div.export-summary');
+      left.appendChild(summary);
+
+      // right: fields
+      const fields = el('div.export-fields');
+      const field = (label, node, hint) => {
+        const r = el('div.export-field');
+        r.append(el('label.export-label', { text: label }), node);
+        if (hint) r.appendChild(el('div.export-hint', { text: hint }));
+        return r;
+      };
+
+      const engineSel = el('select.prop-input');
+      engineSel.append(
+        el('option', { value: 'precise', text: 'Precise — frame-exact (WebCodecs, H.264 up to 4K)' }),
+        el('option', { value: 'realtime', text: 'Realtime capture (MediaRecorder, VP9 up to 8K)' }),
+      );
+      on(engineSel, 'change', () => { state.engine = engineSel.value; updateEstimate(); });
+
+      const qualitySel = el('select.prop-input');
+      for (const q of OS.export.QUALITY_STEPS) qualitySel.appendChild(el('option', { value: q.id, text: q.name, selected: q.id === state.quality }));
+      on(qualitySel, 'change', () => { state.quality = qualitySel.value; updateEstimate(); });
+
+      const containerSel = el('select.prop-input');
+      for (const [v, t] of [
+        ['mp4', 'MP4 (H.264 + AAC) — up to 4K'],
+        ['webm', 'WebM (VP9) — up to 8K'],
+        ['pngseq', 'PNG image sequence (ZIP) — up to 16K'],
+        ['wav', 'WAV (audio only)'],
+        ['m4a', 'M4A (AAC, audio only)'],
+      ]) {
+        containerSel.appendChild(el('option', { value: v, text: t, selected: v === state.container }));
+      }
+      on(containerSel, 'change', () => { state.container = containerSel.value; applyContainerState(); updateEstimate(); });
+
+      const sizeW = el('input.prop-input.num', { type: 'number', min: 2, max: OS.export.MAX_SIDE, step: 2, value: state.width });
+      const sizeH = el('input.prop-input.num', { type: 'number', min: 2, max: OS.export.MAX_SIDE, step: 2, value: state.height });
+      on(sizeW, 'change', () => { state.width = OS.export.even(sizeW.value); sizeW.value = state.width; updateEstimate(); });
+      on(sizeH, 'change', () => { state.height = OS.export.even(sizeH.value); sizeH.value = state.height; updateEstimate(); });
+
+      const fpsInput = el('input.prop-input.num', { type: 'number', min: 1, max: 240, step: 0.001, value: round3(state.fps) });
+      on(fpsInput, 'change', () => { state.fps = clamp(parseFloat(fpsInput.value) || 30, 1, 240); updateEstimate(); });
+
+      const vbr = el('input.prop-input.num', { type: 'number', min: 200_000, max: 200_000_000, step: 100_000, value: state.videoBitrate });
+      on(vbr, 'change', () => { state.videoBitrate = parseInt(vbr.value); updateEstimate(); });
+
+      const abr = el('select.prop-input');
+      for (const r of [96_000, 128_000, 160_000, 192_000, 256_000, 320_000]) abr.appendChild(el('option', { value: r, text: `${r / 1000} kbps`, selected: r === state.audioBitrate }));
+      on(abr, 'change', () => { state.audioBitrate = parseInt(abr.value); updateEstimate(); });
+
+      const audioCb = el('input', { type: 'checkbox', checked: state.audio });
+      on(audioCb, 'change', () => { state.audio = audioCb.checked; updateEstimate(); });
+      const audioRow = el('label.prop-check');
+      audioRow.append(audioCb, el('span', { text: 'Include audio' }));
+
+      const hw = el('input', { type: 'checkbox', checked: state.hardware });
+      on(hw, 'change', () => { state.hardware = hw.checked; });
+      const hwRow = el('label.prop-check');
+      hwRow.append(hw, el('span', { text: 'Prefer hardware encoder (GPU)' }));
+
+      const sel = app.timeline.getSelectedClips ? app.timeline.getSelectedClips() : [];
+      const selSpan = sel.length
+        ? { start: Math.min.apply(null, sel.map((c) => c.start)), end: Math.max.apply(null, sel.map((c) => M().clipEnd(c))) }
+        : null;
+      const rangeSel = el('select.prop-input');
+      rangeSel.append(
+        el('option', { value: 'all', text: `Entire project (${OS.timebase.tc(dur, p.fps)})` }),
+        el('option', { value: 'inout', text: p.inPoint != null || p.outPoint != null ? `In/out range (${OS.timebase.tc((p.inPoint || 0), p.fps)} → ${OS.timebase.tc(p.outPoint ?? dur, p.fps)})` : 'In/out range (none set)' }),
+        el('option', {
+          value: 'selection',
+          text: selSpan
+            ? `Selected clips (${sel.length}: ${OS.timebase.tc(selSpan.start, p.fps)} → ${OS.timebase.tc(selSpan.end, p.fps)})`
+            : 'Selected clips (none selected)',
+        }),
+      );
+      on(rangeSel, 'change', () => { state.rangeMode = rangeSel.value; updateEstimate(); });
+
+      const nameInput = el('input.text-input', { value: p.name || 'OpenScene Project' });
+
+      fields.append(
+        field('Engine', engineSel, 'Precise renders frame-by-frame and can be faster or slower than realtime. Realtime records the preview at 1× speed. If the precise engine is unavailable it falls back automatically.'),
+        field('Quality', qualitySel, 'Scales the target bitrate.'),
+        field('Container / codec', containerSel),
+        field('Resolution', el('div.prop-inputs', {}, [sizeW, el('span.export-x', { text: '×' }), sizeH])),
+        field('Frame rate', fpsInput),
+        field('Video bitrate (bps)', vbr),
+        field('Audio bitrate', abr),
+        field('Audio', el('div', {}, [audioRow, hwRow])),
+        field('Range', rangeSel),
+        field('File name', nameInput),
+      );
+      right.appendChild(el('div.export-group-title', { text: 'Output settings' }));
+      right.appendChild(fields);
+      /* live capability readout — what this machine can actually do at the size */
+      const capNote = el('div.export-cap');
+      right.appendChild(capNote);
+
+      const progressWrap = el('div.export-progress');
+      const bar = el('div.export-bar');
+      const barFill = el('div.export-bar-fill');
+      bar.appendChild(barFill);
+      const progressText = el('div.export-progress-text');
+      progressWrap.append(bar, progressText);
+      progressWrap.style.display = 'none';
+      right.appendChild(progressWrap);
+
+      function round3(v) { return Math.round(v * 1000) / 1000; }
+
+      /* The container decides the engine: the MP4 muxer only writes H.264, the
+         realtime recorder is the VP9/WebM route, and the sequence has no encoder
+         at all. Keep the controls honest about what each choice implies. */
+      function applyContainerState() {
+        const audioOnly = state.container === 'wav' || state.container === 'm4a';
+        const sequence = state.container === 'pngseq';
+        if (state.container === 'mp4') { state.engine = 'precise'; engineSel.value = 'precise'; }
+        else if (state.container === 'webm') { state.engine = 'realtime'; engineSel.value = 'realtime'; }
+        else if (state.container === 'm4a') { state.engine = 'precise'; engineSel.value = 'precise'; }
+        sizeW.disabled = sizeH.disabled = fpsInput.disabled = audioOnly;
+        vbr.disabled = audioOnly || sequence;
+        audioCb.disabled = sequence;
+        engineSel.disabled = sequence || audioOnly;
+      }
+
+      function applyPreset(pr) {
+        if (pr.custom) return;
+        if (pr.container) state.container = pr.container;
+        if (pr.codec) state.codec = pr.codec;
+        if (pr.width) state.width = pr.width;
+        if (pr.height) state.height = pr.height;
+        if (pr.fps) state.fps = pr.fps;
+        if (pr.videoBitrate) state.videoBitrate = pr.videoBitrate;
+        if (pr.audioBitrate != null) state.audioBitrate = pr.audioBitrate;
+        if (pr.container === 'wav') state.audio = true;
+        containerSel.value = state.container;
+        applyContainerState();
+        if (pr.container === 'wav') { state.engine = 'audio'; }
+      }
+
+      function syncFields() {
+        sizeW.value = state.width; sizeH.value = state.height; fpsInput.value = round3(state.fps);
+        vbr.value = state.videoBitrate; abr.value = String(state.audioBitrate);
+        audioCb.checked = state.audio; qualitySel.value = state.quality;
+        updateEstimate();
+      }
+
+      function computeRange() {
+        if (state.rangeMode === 'inout') {
+          const s = p.inPoint != null ? p.inPoint : 0;
+          const e = p.outPoint != null ? p.outPoint : dur;
+          return { start: s, end: Math.max(s + 1, e) };
+        }
+        if (state.rangeMode === 'selection' && selSpan) {
+          return { start: selSpan.start, end: Math.max(selSpan.start + 1, selSpan.end) };
+        }
+        return { start: 0, end: Math.max(1, dur) };
+      }
+
+      function updateEstimate() {
+        const range = computeRange();
+        const frames = Math.max(1, range.end - range.start);
+        const secs = frames / state.fps;
+        const audioOnly = state.container === 'wav' || state.container === 'm4a';
+        const sequence = state.container === 'pngseq';
+        const qf = (OS.export.QUALITY_STEPS.find((q) => q.id === state.quality) || { factor: 1 }).factor;
+        let bytes;
+        if (state.container === 'wav') bytes = (secs * 48000 * 16 * 2) / 8;
+        /* PNG is already DEFLATE-compressed; this is a rough order of magnitude,
+           not a promise. Photographic frames land lower, graphics higher. */
+        else if (sequence) bytes = frames * state.width * state.height * 0.35;
+        else bytes = (secs * (state.videoBitrate * qf + (state.audio ? state.audioBitrate : 0))) / 8;
+        const engineText = audioOnly ? 'offline audio mixdown'
+          : sequence ? 'PNG frame sequence (ZIP)'
+            : state.engine === 'precise' ? 'WebCodecs (precise)' : 'MediaRecorder (realtime)';
+        summary.innerHTML = '';
+        const rows = [
+          ['Duration', `${OS.timebase.tc(frames, p.fps)} (${secs.toFixed(2)} s)`],
+          ['Frames', `${frames}`],
+          ['Resolution', audioOnly ? '(audio only)' : `${state.width}×${state.height} @ ${round3(state.fps)} fps`],
+          ['Est. size', `≈ ${fmtBytes(bytes)}`],
+          ['Engine', engineText],
+        ];
+        if (sequence) rows.push(['Audio', 'a frame sequence carries no audio']);
+        for (const [k, v] of rows) {
+          const r = el('div.export-summary-row', {}, [el('span', { text: k }), el('b', { text: v })]);
+          summary.appendChild(r);
+        }
+        refreshCapability();
+      }
+
+      /* Probe the current size and say plainly what can come out of it, so no one
+         waits ten minutes for an encode the platform was never going to allow. */
+      let capSeq = 0;
+      async function refreshCapability() {
+        const seq = ++capSeq;
+        const w = state.width, h = state.height;
+        if (state.container === 'wav' || state.container === 'm4a') {
+          capNote.className = 'export-cap';
+          capNote.textContent = 'Offline audio mixdown — independent of frame size.';
+          return;
+        }
+        const info = await OS.export.probe(w, h);
+        if (seq !== capSeq) return;
+        if (!info.render) {
+          capNote.className = 'export-cap bad';
+          capNote.textContent = `This renderer cannot allocate a ${w}×${h} canvas. The limit is ${OS.export.MAX_SIDE} px per side and ${(OS.export.MAX_AREA / 1e6).toFixed(0)} megapixels.`;
+          return;
+        }
+        const labels = info.video.filter((v) => v.supported).map((v) => v.label);
+        const parts = [`${(w * h / 1e6).toFixed(1)} MP renders`];
+        if (state.container === 'pngseq') {
+          parts.push('PNG frames have no encoder size limit');
+          parts.push(`~${fmtBytes(w * h * 0.35)} per frame`);
+        } else if (labels.length) {
+          parts.push(`video encoder: ${labels.join(' / ')}`);
+        } else {
+          parts.push('no video encoder can handle this size — export a PNG sequence instead');
+        }
+        capNote.className = 'export-cap' + (labels.length || state.container === 'pngseq' ? '' : ' warn');
+        capNote.textContent = parts.join(' · ');
+      }
+
+      updateEstimate();
+      syncFields();
+
+      const api = this.open('Export', content, { wide: true, dismissable: false });
+      const cancelBtn = this.button('Close', () => { if (state.running) { OS.export.cancel(); } else api.close(); });
+      const startBtn = this.button('Export', () => run(), 'primary');
+      const afterRow = el('div.prop-btnrow');
+      api.foot.append(afterRow, el('span.spacer'), cancelBtn, startBtn);
+      api.onClose = () => { if (state.running) OS.export.cancel(); };
+
+      async function run() {
+        if (state.running) return;
+        if (!dur) { dialogs.toast('Add something to the timeline first', 'warn'); return; }
+        state.running = true;
+        startBtn.disabled = true;
+        startBtn.textContent = 'Exporting…';
+        progressWrap.style.display = 'block';
+        cancelBtn.textContent = 'Cancel';
+        const range = computeRange();
+        const opts = {
+          engine: state.engine, container: state.container, codec: state.codec,
+          width: state.width, height: state.height, fps: state.fps,
+          videoBitrate: state.videoBitrate, audioBitrate: state.audioBitrate,
+          audio: state.audio, hardware: state.hardware, quality: state.quality,
+          range,
+          mastering: app.player && app.player.mastering ? { ...app.player.mastering } : null,
+        };
+        try {
+          const res = await OS.export.run(p, app.media, opts, (prog) => {
+            const pct = Math.round((prog.ratio || 0) * 100);
+            barFill.style.width = pct + '%';
+            let msg = `${prog.phase || 'working'} — ${pct}%`;
+            if (prog.fps) msg += ` · ${prog.fps.toFixed(1)} fps`;
+            if (prog.etaSec != null && Number.isFinite(prog.etaSec)) msg += ` · ETA ${OS.util.fmtDur(prog.etaSec)}`;
+            if (prog.frame != null && prog.total) msg += ` · frame ${prog.frame}/${prog.total}`;
+            if (prog.message) msg = prog.message;
+            progressText.textContent = msg;
+          });
+          const ext = { m4a: 'm4a', wav: 'wav', webm: 'webm', pngseq: 'zip' }[opts.container] || 'mp4';
+          const filename = (nameInput.value.trim() || 'OpenScene Export') + '.' + ext;
+          const isSequence = opts.container === 'pngseq';
+          progressText.textContent = isSequence
+            ? `Done — ${res.engine} engine · ${res.blob.size ? fmtBytes(res.blob.size) : ''} · extract the ZIP for numbered PNG frames`
+            : `Done — ${res.engine} engine · verified: ${res.verification && res.verification.ok ? 'yes' : 'no'} · ${fmtBytes(res.blob.size)}`;
+          for (const n of res.notes) dialogs.toast(n, 'warn', 9000);
+          await app.saveBlob(res.blob, filename, opts.container);
+          afterRow.innerHTML = '';
+          if (!isSequence) {
+            const play = dialogs.button('Play result', () => {
+              const url = URL.createObjectURL(res.blob);
+              const v = el(opts.container === 'wav' || opts.container === 'm4a' ? 'audio.export-preview' : 'video.export-preview', { src: url, controls: true });
+              const wrap = el('div', {}, [v]);
+              const api2 = dialogs.open('Export preview — ' + filename, wrap, { wide: true });
+              api2.foot.append(dialogs.button('Close', () => api2.close()), el('span.spacer'));
+              api2.onClose = () => URL.revokeObjectURL(url);
+            }, '');
+            afterRow.append(play);
+          }
+          if (!isSequence && (!res.verification || !res.verification.ok)) dialogs.toast('The exported file could not be verified by the browser player. Try the realtime engine or a different container.', 'error', 10000);
+        } catch (e) {
+          if (e.message === 'cancelled') { progressText.textContent = 'Cancelled.'; dialogs.toast('Export cancelled', 'warn'); }
+          else { progressText.textContent = 'Failed: ' + e.message; dialogs.toast('Export failed: ' + e.message, 'error', 10000); console.error(e); }
+        } finally {
+          state.running = false;
+          startBtn.disabled = false;
+          startBtn.textContent = 'Export';
+          cancelBtn.textContent = 'Close';
+        }
+      }
+    }
+
+    /* ---------- project settings ---------- */
+
+    projectSettings() {
+      const app = this.app, p = app.project;
+      const content = el('div.form');
+      const fpsSel = el('select.prop-input');
+      for (const f of OS.timebase.PRESETS) fpsSel.appendChild(el('option', { value: `${f.num}/${f.den}`, text: f.label, selected: p.fps.num === f.num && p.fps.den === f.den }));
+      const w = el('input.prop-input.num', { type: 'number', min: 2, max: OS.export.MAX_SIDE, step: 2, value: p.width });
+      const h = el('input.prop-input.num', { type: 'number', min: 2, max: OS.export.MAX_SIDE, step: 2, value: p.height });
+      const resSel = el('select.prop-input');
+      for (const [label, rw, rh] of [
+        ['15360 × 8640 (16K UHD)', 15360, 8640],
+        ['8192 × 4320 (8K DCI)', 8192, 4320],
+        ['7680 × 4320 (8K UHD)', 7680, 4320],
+        ['5120 × 2700 (5K)', 5120, 2700],
+        ['4096 × 2160 (DCI 4K)', 4096, 2160],
+        ['3840 × 2160 (4K UHD)', 3840, 2160],
+        ['2560 × 1440 (QHD)', 2560, 1440], ['1920 × 1080 (Full HD)', 1920, 1080], ['1280 × 720 (HD)', 1280, 720], ['854 × 480 (SD)', 854, 480], ['1080 × 1920 (vertical)', 1080, 1920], ['1080 × 1080 (square)', 1080, 1080], ['Custom', 0, 0],
+      ]) {
+        resSel.appendChild(el('option', { value: `${rw}x${rh}`, text: label, selected: p.width === rw && p.height === rh }));
+      }
+      on(resSel, 'change', () => {
+        const [rw, rh] = resSel.value.split('x').map(Number);
+        if (rw && rh) { w.value = rw; h.value = rh; }
+      });
+      const bg = el('input.prop-color', { type: 'color', value: p.backgroundColor || '#000000' });
+      const name = el('input.text-input', { value: p.name || '' });
+      content.append(
+        row2('Project name', name),
+        row2('Frame rate', fpsSel),
+        row2('Preset resolution', resSel),
+        row2('Resolution', el('div.prop-inputs', {}, [w, el('span.export-x', { text: '×' }), h])),
+        row2('Background', bg),
+        el('div.prop-note', { text: 'Changing the frame rate re-times frame numbers for display but keeps clips where they are. Changing resolution does not rescale media.' }),
+      );
+      const api = this.open('Project settings', content, { small: true });
+      const cancel = this.button('Cancel', () => api.close());
+      const ok = this.button('Apply', () => {
+        const [num, den] = fpsSel.value.split('/').map(Number);
+        const values = {
+          name: name.value.trim() || 'Untitled Project',
+          fps: OS.timebase.fps(num, den),
+          width: OS.export.even(parseInt(w.value) || 1920),
+          height: OS.export.even(parseInt(h.value) || 1080),
+          backgroundColor: bg.value,
+        };
+        app.exec(OS.commands.SetProjectProps(p, values, { name: 'Project settings' }));
+        api.close();
+      }, 'primary');
+      api.foot.append(el('span.spacer'), cancel, ok);
+
+      function row2(label, node) {
+        const r = el('div.prop-row');
+        r.append(el('label.prop-label', { text: label }), node);
+        return r;
+      }
+    }
+
+    /* ---------- audio mastering ---------- */
+
+    mastering() {
+      const app = this.app;
+      const m = app.player.mastering;
+      const content = el('div.form');
+      const rows = [];
+      const row3 = (label, node, hint) => {
+        const r = el('div.prop-row');
+        const l = el('label.prop-label', { text: label })
+        if (hint) l.title = hint;
+        r.append(l, node);
+        rows.push(r);
+        return r;
+      };
+      const slider = (min, max, step, get, set) => {
+        const wrap = el('div.prop-inputs');
+        const num = el('input.prop-input.num', { type: 'number', min, max, step, value: get().toFixed(1) });
+        const rng = el('input.prop-range', { type: 'range', min, max, step, value: get() });
+        const push = (v, commit) => {
+          const n = clamp(parseFloat(v), min, max);
+          if (!Number.isFinite(n)) return;
+          num.value = n.toFixed(1); rng.value = n;
+          set(n);
+          if (commit) app.player.applyMastering();
+        };
+        on(num, 'change', () => push(num.value, true));
+        on(num, 'input', () => { rng.value = num.value; });
+        on(rng, 'input', () => push(rng.value, false));
+        on(rng, 'change', () => push(rng.value, true));
+        wrap.append(num, rng);
+        return wrap;
+      };
+      const toggle = (get, set) => {
+        const cb = el('input.prop-check', { type: 'checkbox' });
+        cb.checked = !!get();
+        on(cb, 'change', () => { set(cb.checked); app.player.applyMastering(); });
+        return el('div.prop-checkwrap', {}, [cb]);
+      };
+
+      content.append(el('div.prop-note', { text: 'The mastering bus sits on the program output: it shapes playback monitoring and is baked into every audio and video export. Set it once and it applies everywhere.' }));
+      row3('Master volume', slider(0, 2, 0.01, () => app.player.masterVolume, (v) => app.player.setMasterVolume(v)), 'Overall output level, applied before the EQ');
+      content.append(el('div.prop-section-head', { text: 'Three-band EQ' }));
+      row3('Low shelf (dB)', slider(-18, 18, 0.5, () => m.low, (v) => { m.low = v; }));
+      row3('Mid peak (dB)', slider(-18, 18, 0.5, () => m.mid, (v) => { m.mid = v; }));
+      row3('High shelf (dB)', slider(-18, 18, 0.5, () => m.high, (v) => { m.high = v; }));
+      content.append(el('div.prop-section-head', { text: 'Dynamics' }));
+      row3('Compressor', toggle(() => m.comp, (v) => { m.comp = v; }), 'Glues quiet and loud passages together');
+      row3('Comp threshold (dB)', slider(-60, 0, 1, () => m.compThreshold, (v) => { m.compThreshold = v; }));
+      row3('Comp ratio', slider(1, 20, 0.5, () => m.compRatio, (v) => { m.compRatio = v; }));
+      row3('Output limiter', toggle(() => m.limiter, (v) => { m.limiter = v; }), 'Brick-wall ceiling at -0.8 dBFS to stop clipping');
+      for (const r of rows) content.appendChild(r);
+
+      const api = this.open('Audio mastering', content, { small: true });
+      const reset = this.button('Reset', () => {
+        Object.assign(m, { low: 0, mid: 0, high: 0, comp: false, compThreshold: -18, compRatio: 2.5, limiter: true });
+        app.player.applyMastering();
+        api.close();
+      });
+      const close = this.button('Done', () => api.close(), 'primary');
+      api.foot.append(el('span.spacer'), reset, close);
+    }
+
+    /* ---------- shortcuts ---------- */
+
+    shortcuts() {
+      const groups = OS.shortcuts.SHORTCUTS;
+      const content = el('div.shortcuts');
+      for (const [group, items] of Object.entries(groups)) {
+        const box = el('div.shortcut-group');
+        box.appendChild(el('div.shortcut-group-title', { text: group }));
+        for (const [keys, desc] of items) {
+          box.appendChild(el('div.shortcut-row', {}, [el('kbd', { text: keys }), el('span', { text: desc })]));
+        }
+        content.appendChild(box);
+      }
+      const api = this.open('Keyboard shortcuts', content, { wide: true });
+      api.foot.append(el('span.spacer'), this.button('Close', () => api.close(), 'primary'));
+    }
+
+    about() {
+      const app = this.app;
+      const content = el('div.about');
+      content.append(
+        el('img.about-logo', { src: 'resources/logo-wordmark.svg', alt: 'OpenScene' }),
+        el('div.about-tag', { text: 'Professional open-source video editor' }),
+        el('div.about-rows', {}, [
+          kv('Version', app.VERSION),
+          kv('Platform', (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || 'unknown'),
+          kv('Engine', (navigator.userAgent.match(/(Chrome|Edg|Electron)\/[\d.]+/) || ['Chromium'])[0]),
+          kv('WebCodecs', ('VideoEncoder' in window) ? 'available' : 'not available'),
+          kv('MediaRecorder', (typeof MediaRecorder !== 'undefined') ? 'available' : 'not available'),
+          kv('OfflineAudioContext', (window.OfflineAudioContext ? 'available' : 'not available')),
+          kv('License', 'MIT'),
+        ]),
+        el('div.about-note', { text: 'Built with zero third-party dependencies: the timeline, compositor, mixer, MP4 muxer and UI are all hand-written and run on the browser engine.' }),
+      );
+      const api = this.open('About OpenScene', content, { small: true });
+      api.foot.append(
+        this.button('Run self-test', () => { api.close(); this.app.runSelfTest(); }),
+        this.button('Licenses', () => this.app.showLicenses()),
+        el('span.spacer'),
+        this.button('Close', () => api.close(), 'primary'),
+      );
+    }
+  }
+
+  function kv(k, v) {
+    return el('div.prop-kv', {}, [el('span.prop-kv-k', { text: k }), el('span.prop-kv-v', { text: String(v) })]);
+  }
+
+  OS.dialogs = { Dialogs };
+})();

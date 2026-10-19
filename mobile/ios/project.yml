@@ -1,0 +1,49 @@
+# OpenScene — XcodeGen project definition (optional convenience).
+#
+# The .xcodeproj itself is deliberately not checked in: it carries an absolute
+# build state and a signing identity that belong to whoever is building, not to
+# the repository. If you have XcodeGen (brew install xcodegen), this file
+# generates the project for you:
+#
+#     cd mobile/ios                 # or Downloads/OpenScene-iOS
+#     xcodegen generate
+#     open OpenScene.xcodeproj
+#
+# Without XcodeGen, follow the four steps in README.md and drag the same files
+# into a new Xcode app project by hand — the result is identical.
+
+name: OpenScene
+
+options:
+  bundleIdPrefix: app.openscene
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+  xcodeVersion: "15.0"
+
+targets:
+  OpenScene:
+    type: application
+    platform: iOS
+    sources:
+      - path: OpenScene
+        excludes:
+          # Referenced through INFOPLIST_FILE, so it must not also be copied in
+          # as a resource.
+          - "Info.plist"
+      # A folder reference (not a group): www/ has to keep its directory shape
+      # inside the bundle, because the loopback server resolves files by path.
+      - path: www
+        type: folder
+    settings:
+      base:
+        INFOPLIST_FILE: OpenScene/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: app.openscene
+        PRODUCT_NAME: OpenScene
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        # AppDelegate builds the window itself; no scene manifest is generated.
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: NO
