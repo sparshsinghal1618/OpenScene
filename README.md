@@ -18,6 +18,9 @@ ships with the operating system.
   <img src="icons/icon-192.png" width="128" alt="OpenScene logo">
 </p>
 
+The project website lives at **https://sparshsinghal1618.github.io/OpenScene/** (source in
+[`docs/`](docs/)).
+
 ---
 
 ## Get it
