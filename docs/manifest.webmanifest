@@ -1,0 +1,15 @@
+{
+  "name": "OpenScene — free, open-source video editor for Windows",
+  "short_name": "OpenScene",
+  "description": "A complete non-linear video editor for Windows. 164 transitions, 136 effects, keyframing, titling, audio mastering and a frame-exact H.264/AAC exporter — fully offline.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b0e14",
+  "theme_color": "#0b0e14",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

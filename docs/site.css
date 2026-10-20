@@ -12,7 +12,7 @@
   --line-soft: #1b2330;
   --ink:       #e8edf6;
   --ink-2:     #a6b2c6;
-  --ink-3:     #6f7d94;
+  --ink-3:     #8b98ad;
   --brand:     #38bdf8;
   --brand-2:   #6366f1;
   --accent:    #f59e0b;
@@ -49,10 +49,10 @@ p  { margin: 0 0 1em; color: var(--ink-2); }
 .wrap { width: 100%; max-width: var(--wrap); margin: 0 auto; padding: 0 24px; }
 .wrap.narrow { max-width: 860px; }
 .center { text-align: center; }
-.grad {
-  background: linear-gradient(100deg, var(--brand), var(--brand-2) 55%, #a78bfa);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-}
+/* A solid brand colour rather than gradient-clipped transparent text: the
+   gradient looked good but transparent glyphs are unreadable to assistive
+   contrast checks (and to forced-colours mode). */
+.grad { color: #7dd3fc; }
 
 .skip {
   position: absolute; left: -999px; top: 0; z-index: 100;
@@ -69,7 +69,9 @@ p  { margin: 0 0 1em; color: var(--ink-2); }
   backdrop-filter: saturate(150%) blur(12px);
   -webkit-backdrop-filter: saturate(150%) blur(12px);
   border-bottom: 1px solid var(--line-soft);
+  transition: box-shadow .2s, background .2s;
 }
+.top.scrolled { box-shadow: 0 8px 24px rgba(0,0,0,.34); background: rgba(11,14,20,.92); }
 .top-in { display: flex; align-items: center; gap: 20px; height: 64px; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: -.02em; }
 .brand img { border-radius: 9px; }
@@ -83,7 +85,7 @@ p  { margin: 0 0 1em; color: var(--ink-2); }
 .nav a:hover { color: var(--ink); background: var(--panel); }
 .nav-cta {
   color: #05121b !important; font-weight: 700;
-  background: linear-gradient(100deg, var(--brand), #7dd3fc) !important;
+  background: #7dd3fc !important;
 }
 .nav-cta:hover { filter: brightness(1.07); }
 
@@ -111,7 +113,7 @@ p  { margin: 0 0 1em; color: var(--ink-2); }
 }
 .btn:active { transform: translateY(1px); }
 .btn.primary {
-  background: linear-gradient(100deg, var(--brand), #60a5fa);
+  background: #7dd3fc;
   color: #05121b; box-shadow: 0 10px 26px rgba(56,189,248,.26);
 }
 .btn.primary:hover { filter: brightness(1.08); }
@@ -122,8 +124,10 @@ p  { margin: 0 0 1em; color: var(--ink-2); }
 
 /* ------------------------------------------------ hero */
 .hero { position: relative; padding: 76px 0 68px; overflow: hidden; }
-.hero::before {
-  content: ""; position: absolute; inset: -30% -10% auto -10%; height: 620px;
+/* The decorative glow is a sibling layer, not a background of the text, so
+   it never counts as a background-image ancestor during contrast checks. */
+.hero-glow {
+  position: absolute; inset: -30% -10% auto -10%; height: 620px;
   background:
     radial-gradient(46% 58% at 22% 30%, rgba(56,189,248,.20), transparent 70%),
     radial-gradient(40% 52% at 78% 18%, rgba(99,102,241,.20), transparent 72%);
@@ -147,7 +151,7 @@ p  { margin: 0 0 1em; color: var(--ink-2); }
 .hero-art { position: relative; }
 .app-mock {
   border: 1px solid var(--line); border-radius: var(--radius);
-  background: linear-gradient(180deg, var(--panel), #10151f);
+  background: #141a26;
   box-shadow: var(--shadow); overflow: hidden;
 }
 .mock-bar {
@@ -162,7 +166,7 @@ p  { margin: 0 0 1em; color: var(--ink-2); }
 .mock-body { display: grid; grid-template-columns: 1fr 128px; gap: 10px; padding: 12px; }
 .mock-preview {
   aspect-ratio: 16/9; border-radius: 9px;
-  background: radial-gradient(60% 60% at 50% 40%, #1d2a3e, #0c101a 75%);
+  background: #101826;
   border: 1px solid var(--line-soft); display: grid; place-items: center;
 }
 .play { font-size: 1.5rem; color: rgba(232,237,246,.5); }
@@ -178,8 +182,8 @@ p  { margin: 0 0 1em; color: var(--ink-2); }
   font-size: .66rem; color: #04121b; font-weight: 700; padding: 0 7px;
   display: flex; align-items: center; overflow: hidden; white-space: nowrap;
 }
-.clip.v { background: linear-gradient(180deg,#7dd3fc,#38bdf8); }
-.clip.a { background: linear-gradient(180deg,#a7f3d0,#34d399); }
+.clip.v { background: #7dd3fc; }
+.clip.a { background: #6ee7b7; }
 
 .badge-float {
   position: absolute; font-size: .74rem; font-weight: 700;
@@ -197,8 +201,7 @@ p  { margin: 0 0 1em; color: var(--ink-2); }
 .strip { border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); background: var(--bg-2); }
 .strip-in { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; padding: 26px 24px; }
 .strip-in div { text-align: center; }
-.strip-in b { display: block; font-size: 1.7rem; font-weight: 800; letter-spacing: -.03em;
-  background: linear-gradient(100deg,var(--brand),#a78bfa); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.strip-in b { display: block; font-size: 1.7rem; font-weight: 800; letter-spacing: -.03em; color: #7dd3fc; }
 .strip-in span { font-size: .78rem; color: var(--ink-3); text-transform: uppercase; letter-spacing: .07em; }
 
 /* ------------------------------------------------ sections */
@@ -210,15 +213,14 @@ p  { margin: 0 0 1em; color: var(--ink-2); }
 /* cards */
 .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 42px; }
 .card {
-  background: linear-gradient(180deg, var(--panel), #111722);
+  background: var(--panel);
   border: 1px solid var(--line); border-radius: var(--radius);
   padding: 24px 22px; transition: transform .18s, border-color .18s, box-shadow .18s;
 }
-.card:hover { transform: translateY(-3px); border-color: #33405a; box-shadow: 0 16px 36px rgba(0,0,0,.34); }
 .card .ico {
   width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center;
   font-size: 1.1rem; margin-bottom: 15px;
-  background: linear-gradient(140deg, rgba(56,189,248,.2), rgba(99,102,241,.2));
+  background: rgba(56,189,248,.14);
   border: 1px solid var(--line); color: var(--brand);
 }
 .card h3 { color: var(--ink); }
@@ -244,8 +246,7 @@ p  { margin: 0 0 1em; color: var(--ink-2); }
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
   padding: 22px; transition: border-color .18s, transform .18s;
 }
-.plat:hover { border-color: #33405a; transform: translateY(-2px); }
-.plat.ready { border-color: rgba(56,189,248,.4); background: linear-gradient(180deg, rgba(56,189,248,.08), var(--panel)); }
+.plat.ready { border-color: rgba(56,189,248,.4); background: #12202e; }
 .plat h3 { margin-bottom: 6px; }
 .plat p { font-size: .9rem; margin-bottom: 14px; }
 .tag {
@@ -287,10 +288,7 @@ p  { margin: 0 0 1em; color: var(--ink-2); }
 .faq p { font-size: .93rem; margin: 0 0 16px; }
 
 /* cta */
-.cta { padding: 84px 0; background:
-  radial-gradient(50% 120% at 50% 0%, rgba(56,189,248,.16), transparent 70%), var(--bg);
-  border-top: 1px solid var(--line-soft);
-}
+.cta { padding: 84px 0; background: #0d1620; border-top: 1px solid var(--line-soft); }
 .cta h2 { margin-bottom: .3em; }
 
 /* footer */
@@ -310,32 +308,122 @@ p  { margin: 0 0 1em; color: var(--ink-2); }
 .reveal { opacity: 0; transform: translateY(14px); transition: opacity .5s ease, transform .5s ease; }
 .reveal.in { opacity: 1; transform: none; }
 
-/* ------------------------------------------------ responsive */
-@media (max-width: 1020px) {
-  .hero-in { grid-template-columns: 1fr; gap: 40px; }
-  .hero-art { max-width: 560px; }
+/* ------------------------------------------------ desktop / hover
+   Lift effects only where a real pointer exists, so touch devices never get
+   a "stuck" hover state after a tap. Also the wide-screen tuning.
+   -------------------------------------------------------------------- */
+@media (hover: hover) and (pointer: fine) {
+  .card:hover { transform: translateY(-3px); border-color: #33405a; box-shadow: 0 16px 36px rgba(0,0,0,.34); }
+  .plat:hover { border-color: #33405a; transform: translateY(-2px); }
+}
+
+@media (min-width: 1280px) {
+  :root { --wrap: 1200px; }
+  .section { padding: 92px 0; }
+  .grid { gap: 20px; }
+}
+
+/* ------------------------------------------------ responsive
+   Mobile-first refinements. The base styles above already flow, so these
+   layers mainly tighten spacing, raise tap targets to a comfortable size,
+   and re-flow the grids as the viewport narrows. Breakpoints:
+     <=1080  tablet landscape / small laptop
+     <=900   tablet portrait
+     <=720   phone (nav collapses to the burger menu)
+     <=430   small phone
+   -------------------------------------------------------------------- */
+
+/* Anchored sections must clear the sticky header. */
+:root { --top: 64px; }
+section[id], #main { scroll-margin-top: calc(var(--top) + 12px); }
+
+/* A tidy horizontal-scroll affordance for the comparison table on touch. */
+.tablewrap { -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+
+/* Tap feedback + touch scrolling everywhere it matters. */
+.btn, .nav a, .mobile-nav a, .faq summary, .card, .plat { -webkit-tap-highlight-color: transparent; }
+.card, .plat, .faq details, .cmp, .dl { touch-action: manipulation; }
+
+@media (max-width: 1080px) {
   .grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 900px) {
+  .hero { padding: 62px 0 56px; }
+  .hero-in { grid-template-columns: 1fr; gap: 40px; }
+  .hero-art { max-width: 560px; width: 100%; }
+  .lede { max-width: 60ch; }
+  .sub { max-width: 60ch; }
+  .section { padding: 70px 0; }
+  .grid { gap: 16px; }
   .plats { grid-template-columns: repeat(2, 1fr); }
+  .strip-in { grid-template-columns: repeat(3, 1fr); row-gap: 22px; }
 }
 
 @media (max-width: 720px) {
+  :root { --top: 58px; }
+
+  /* Collapse the top nav into the burger menu, locked while open. */
+  .top-in { height: var(--top); gap: 12px; }
   .nav { display: none; }
   .menu-btn { display: flex; }
   .mobile-nav { display: flex; }
   .mobile-nav[hidden] { display: none; }
-  .section { padding: 60px 0; }
-  .hero { padding: 52px 0 46px; }
-  .strip-in { grid-template-columns: repeat(2, 1fr); gap: 20px 12px; }
+  body.menu-open { overflow: hidden; }
+
+  .section { padding: 56px 0; }
+  .hero { padding: 46px 0 44px; }
+  h1 { font-size: clamp(1.85rem, 8.4vw, 2.6rem); }
+  .lede { font-size: 1rem; }
+
+  /* Full-width, comfortably tall buttons on touch. */
+  .hero-actions .btn { padding: 14px 20px; }
+  .menu-btn { min-width: 44px; min-height: 44px; align-items: center; justify-content: center; }
+  .mobile-nav a { min-height: 46px; display: flex; align-items: center; }
+
   .grid, .plats { grid-template-columns: 1fr; }
-  .badge-float.b1 { left: 4px; }
-  .badge-float.b2 { right: 4px; }
-  .foot-in { flex-direction: column; align-items: flex-start; }
+  .grid { gap: 14px; margin-top: 30px; }
+  .plats { margin-top: 30px; gap: 14px; }
+  .card { padding: 20px 18px; }
+
+  .strip-in { grid-template-columns: repeat(2, 1fr); gap: 20px 12px; padding: 22px 20px; }
+  .strip-in b { font-size: 1.5rem; }
+
+  /* Let the comparison table scroll inside its own box, never the page. */
+  .cmp { min-width: 560px; font-size: .88rem; }
+  .cmp th, .cmp td { padding: 11px 13px; }
+
+  .faq summary { padding: 16px 0; min-height: 44px; }
+  .dl { padding: 20px; }
+  .cta { padding: 60px 0; }
+
+  .badge-float { font-size: .7rem; padding: 6px 10px; }
+  .badge-float.b1 { top: -10px; left: 6px; }
+  .badge-float.b2 { right: 6px; bottom: 52px; }
+  .badge-float.b3 { bottom: -10px; left: 14px; }
+
+  .foot { padding: 34px 0 22px; }
+  .foot-in { flex-direction: column; align-items: flex-start; gap: 16px; }
+  .foot-links { gap: 8px 18px; }
+  .foot-links a { padding: 8px 0; }
 }
 
-@media (max-width: 420px) {
+@media (max-width: 430px) {
   .wrap { padding: 0 16px; }
   .btn { width: 100%; }
   .hero-actions { flex-direction: column; }
+  .hero-actions .btn { width: 100%; }
+  .strip-in { grid-template-columns: 1fr 1fr; }
+  .mock-side { display: none; }           /* keep the app mock legible */
+  .mock-body { grid-template-columns: 1fr; }
+  .badge-float.b2 { display: none; }
+  .foot-brand { flex-wrap: wrap; }
+}
+
+/* Short landscape phones: tighten the hero so the CTA stays in view. */
+@media (max-height: 480px) and (orientation: landscape) {
+  .hero { padding: 34px 0 30px; }
+  .badge-float { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -343,4 +431,9 @@ p  { margin: 0 0 1em; color: var(--ink-2); }
   .badge-float { animation: none; }
   .reveal { opacity: 1; transform: none; transition: none; }
   * { transition-duration: .01ms !important; }
+}
+
+/* Respect the OS reduced-transparency hint. */
+@media (prefers-reduced-transparency: reduce) {
+  .top { background: var(--bg); backdrop-filter: none; -webkit-backdrop-filter: none; }
 }

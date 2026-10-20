@@ -5,15 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>OpenScene — free, open-source video editor for Windows</title>
 <meta name="description" content="OpenScene is a free, open-source, professional non-linear video editor for Windows. 164 transitions, 136 effects, keyframing, titling, a mastering audio bus and a frame-exact H.264/AAC exporter — all offline, with zero runtime dependencies." />
+<meta name="color-scheme" content="dark" />
 <meta name="theme-color" content="#0b0e14" />
+<meta name="format-detection" content="telephone=no" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="OpenScene" />
 <meta property="og:title" content="OpenScene — free, open-source video editor for Windows" />
 <meta property="og:description" content="A complete NLE that runs entirely on your PC. No cloud, no accounts, no telemetry, no runtime dependencies." />
 <meta property="og:type" content="website" />
-<meta property="og:image" content="icons/icon-512.png" />
+<meta property="og:url" content="https://sparshsinghal1618.github.io/OpenScene/" />
+<meta property="og:image" content="https://sparshsinghal1618.github.io/OpenScene/icons/icon-512.png" />
+<meta name="twitter:card" content="summary_large_image" />
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32" />
 <link rel="icon" href="icons/favicon-16.png" sizes="16x16" />
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png" />
-<link rel="stylesheet" href="site.css" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="stylesheet" href="site.css?v=2" />
 </head>
 <body>
 
@@ -48,6 +57,7 @@
 
 <!-- ------------------------------------------------ hero -->
 <section class="hero">
+  <div class="hero-glow" aria-hidden="true"></div>
   <div class="wrap hero-in">
     <div class="hero-copy">
       <p class="eyebrow">Free &amp; open source · MIT licence · Windows 10/11</p>
@@ -334,24 +344,65 @@ Build-Installer.bat</code></pre>
 (function () {
   var btn = document.getElementById('menuBtn');
   var nav = document.getElementById('mobileNav');
+
+  function setMenu(open) {
+    if (!btn || !nav) return;
+    if (open) { nav.removeAttribute('hidden'); }
+    else { nav.setAttribute('hidden', ''); }
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    btn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+    document.body.classList.toggle('menu-open', open);
+  }
+
   if (btn && nav) {
-    btn.addEventListener('click', function () {
-      var open = nav.hasAttribute('hidden');
-      if (open) { nav.removeAttribute('hidden'); } else { nav.setAttribute('hidden', ''); }
-      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      setMenu(nav.hasAttribute('hidden'));
     });
     nav.addEventListener('click', function (e) {
-      if (e.target.tagName === 'A') { nav.setAttribute('hidden', ''); btn.setAttribute('aria-expanded', 'false'); }
+      if (e.target.tagName === 'A') setMenu(false);
+    });
+    // Tap outside, press Escape, or rotate/resize back to desktop closes it.
+    document.addEventListener('click', function (e) {
+      if (!nav.hasAttribute('hidden') && !nav.contains(e.target) && e.target !== btn) setMenu(false);
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') setMenu(false);
+    });
+    var desktop = window.matchMedia('(min-width: 721px)');
+    (desktop.addEventListener || desktop.addListener).call(desktop, function (e) {
+      if (e.matches) setMenu(false);
     });
   }
-  // Reveal on scroll
-  var io = 'IntersectionObserver' in window ? new IntersectionObserver(function (es) {
-    es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
-  }, { rootMargin: '0px 0px -8% 0px' }) : null;
-  document.querySelectorAll('.card, .plat, .faq details, .dl, .cmp').forEach(function (el) {
-    if (!io) { el.classList.add('in'); return; }
-    el.classList.add('reveal'); io.observe(el);
-  });
+
+  // Reveal on scroll — skipped entirely when the user prefers less motion.
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce || !('IntersectionObserver' in window)) {
+    document.querySelectorAll('.card, .plat, .faq details, .dl, .cmp').forEach(function (el) {
+      el.classList.add('in');
+    });
+  } else {
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+    }, { rootMargin: '0px 0px -8% 0px' });
+    document.querySelectorAll('.card, .plat, .faq details, .dl, .cmp').forEach(function (el) {
+      el.classList.add('reveal'); io.observe(el);
+    });
+  }
+
+  // Header shadow only once the page has scrolled.
+  var top = document.getElementById('top');
+  var ticking = false;
+  function onScroll() {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function () {
+      if (top) top.classList.toggle('scrolled', window.scrollY > 8);
+      ticking = false;
+    });
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
 })();
 </script>
 </body>
