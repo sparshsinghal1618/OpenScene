@@ -412,12 +412,36 @@
     }
   }
 
+  /* Hard ceiling on what we are willing to hand to decodeAudioData. A 4K clip is
+     hundreds of megabytes of container; decoding it whole to draw a waveform
+     blocks the main thread for minutes (and on many machines never returns).
+     Anything above this is reported as "no peaks" straight away and the clip
+     still imports, plays and exports — it simply shows a flat waveform. */
+  const MAX_PEAK_DECODE_BYTES = 96 * 1024 * 1024;
+
+  /* Peaks decoded from a container that also carries video are always a guess:
+     decodeAudioData on an .mp4/.mkv decodes the *whole* file, so a 3 GB movie
+     would push gigabytes of PCM through memory. Only "audio-first" containers
+     or small files are worth the cost, and even then the work is bounded. */
+  function worthDecoding(file) {
+    if (!file) return false;
+    if (file.size > MAX_PEAK_DECODE_BYTES) return false;
+    const ext = extOf(file.name || '');
+    // Video containers that can hold a full movie: skip unless tiny.
+    const heavy = VIDEO_EXT.indexOf(ext) >= 0;
+    if (heavy && file.size > 24 * 1024 * 1024) return false;
+    return true;
+  }
+
   /* Waveform peaks from an audio Asset file. Returns Float32Array [max0,min0,max1,min1,...]. */
   async function computePeaks(file, onProgress) {
+    if (!worthDecoding(file)) {
+      return { peaks: null, buckets: 0, duration: 0, sampleRate: 0, channels: 0, skipped: true };
+    }
     const buf = await file.arrayBuffer();
     const ac = new (window.AudioContext || window.webkitAudioContext)();
     try {
-      const audio = await ac.decodeAudioData(buf);
+      const audio = await withTimeout(ac.decodeAudioData(buf), 20000, 'decodeAudioData');
       const ch = audio.numberOfChannels, sr = audio.sampleRate, len = audio.length;
       const buckets = Math.min(MAX_PEAKS, len);
       const per = len / buckets;
@@ -558,13 +582,21 @@
       if (poster) queuePoster(poster).then((thumb) => {
         if (thumb) { asset.thumb = thumb; OS.app && OS.app.events.emit('media-updated', asset); }
       }).catch(() => {});
-      // persist file for relink/autosave restore
+      // Persist the file for autosave restore / relinking, off the critical path.
+      // Awaiting this used to serialise every import behind a full IndexedDB write
+      // of the source bytes — for a folder of 4K clips that is minutes of stall
+      // before anything appears in the bin. Fire it and let it settle later.
       if (asset.bytes < 1.5 * 1024 ** 3) {
-        try { asset.fileKey = uid('file'); await idbPut('files', asset.fileKey, file); } catch (e) { asset.fileKey = null; }
+        const key = uid('file');
+        asset.fileKey = key;
+        const pending = idbPut('files', key, file).catch(() => { asset.fileKey = null; });
+        this._persistChain = (this._persistChain || Promise.resolve()).then(() => pending);
       }
-      // background waveform for audio + videos that may carry audio
+      // Background waveform for audio + videos that may carry audio. This is
+      // best-effort and must never hold up an import: computePeaks is bounded,
+      // and a skipped/failed decode simply leaves the clip with no waveform.
       if (kind !== 'image') this.ensurePeaks(asset.id).then((res) => {
-        if (res && !asset.thumb) { asset.thumb = peaksToThumb(res); OS.app && OS.app.events.emit('media-updated', asset); }
+        if (res && res.peaks && !asset.thumb) { asset.thumb = peaksToThumb(res); OS.app && OS.app.events.emit('media-updated', asset); }
         else OS.app && OS.app.events.emit('media-updated', asset);
       }).catch(() => {});
       OS.app && OS.app.events.emit('media-added', asset);
@@ -674,7 +706,12 @@
       if (rec.peaksPromise) return rec.peaksPromise;
       if (!rec.file) return Promise.resolve(null);
       rec.peaksPromise = computePeaks(rec.file)
-        .then((res) => { rec.peaks = res; rec.asset.durationFrames = rec.asset.durationFrames || OS.timebase.secondsToFrames(res.duration, OS.app ? OS.app.project.fps : OS.timebase.fps(30, 1)); return res; })
+        .then((res) => {
+          if (!res || res.skipped || !(res.duration > 0)) return null;
+          rec.peaks = res;
+          rec.asset.durationFrames = rec.asset.durationFrames || OS.timebase.secondsToFrames(res.duration, OS.app ? OS.app.project.fps : OS.timebase.fps(30, 1));
+          return res;
+        })
         .catch((e) => { rec.peaksFailed = true; return null; });
       return rec.peaksPromise;
     }

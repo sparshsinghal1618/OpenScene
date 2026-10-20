@@ -327,6 +327,7 @@
     }
     zoomBy(k, anchorX) { this.setZoom(this.view.pxPerFrame * k, anchorX != null ? anchorX : this.cssW / 2); }
     zoomToFit() {
+      // Fit the actual edits, not the open-ended tail.
       const dur = Math.max(this.fps * 5, M().projectDuration(this.app.project) + this.fps * 2);
       this.setZoom(Math.max(0.004, (this.cssW - 24) / dur));
       this.view.scrollFrames = 0;
@@ -826,11 +827,22 @@
       ctx.closePath(); ctx.fill();
     }
 
+    /* The timeline is open-ended: there is no project length to run out of, so
+       the scrollable span is always the content plus a generous tail. That tail
+       is what lets you park the playhead past your last clip and drop new media
+       there without the view refusing to scroll further. It grows with the
+       content so the scrollbar thumb keeps a sane size on long edits. */
+    timelineSpan() {
+      const content = M().projectDuration(this.app.project);
+      const tail = Math.max(this.fps * 30, content * 0.25);
+      return Math.max(this.fps * 60, content + tail);
+    }
+
     _drawScrollbar(ctx, W, H, p) {
       const y = H - H_SCROLLBAR_H;
       ctx.fillStyle = '#101318';
       ctx.fillRect(0, y, W, H_SCROLLBAR_H);
-      const dur = Math.max(this.fps * 5, M().projectDuration(p) + this.fps * 3);
+      const dur = this.timelineSpan();
       const total = dur / this.view.pxPerFrame;                 // total content px
       const frac = Math.min(1, W / Math.max(1, total));
       if (frac >= 0.999) return;

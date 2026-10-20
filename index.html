@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
 <meta http-equiv="X-UA-Compatible" content="IE=edge" />
 <title>OpenScene — Professional open-source video editor</title>
-<meta name="description" content="OpenScene is a free, open-source, professional non-linear video editor. Cut, compose, mix, title and export — on Windows, Android, iOS and the web, entirely on your own machine." />
+<meta name="description" content="OpenScene is a free, open-source, professional non-linear video editor for Windows. Cut, compose, mix, title and export — entirely on your own machine." />
 <meta name="color-scheme" content="dark" />
 <meta name="theme-color" content="#14161b" />
 <link rel="manifest" href="manifest.webmanifest" />
@@ -224,11 +224,12 @@
 <script src="js/mobile.js"></script>
 <script src="js/dialogs.js"></script>
 <script src="js/shortcuts.js"></script>
+<script src="js/osp.js"></script>
 <script src="js/persist.js"></script>
 <script src="js/selftest.js"></script>
 <script src="js/app.js"></script>
 <script>
-/* Installable PWA (Android, iOS home screen, desktop browsers). Skipped inside
+/* Installable PWA (desktop browsers). Skipped inside
    the native Windows and mobile shells, which already run from local disk. */
 (function () {
   if (window.openscene) return;

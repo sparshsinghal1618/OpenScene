@@ -1,6 +1,6 @@
 # OpenScene
 
-**A free, open-source, professional non-linear video editor — for Windows, Android and iOS.**
+**A free, open-source, professional non-linear video editor for Windows.**
 
 OpenScene is a complete editor: a multi-track timeline, a real compositor, **164
 transitions**, **136 effects**, keyframing, titling, a mastering audio bus and a
@@ -11,6 +11,8 @@ Built with **zero third-party runtime libraries**. The timeline, the compositor,
 effects, the transitions, the titler, the audio engine, the MP4 (ISO-BMFF) muxer and the
 entire interface are written from scratch and run directly on the web engine that already
 ships with the operating system.
+
+> **Android, iOS and the web app are coming soon.** This repository is the Windows editor.
 
 <p align="center">
   <img src="icons/icon-192.png" width="128" alt="OpenScene logo">
@@ -38,37 +40,12 @@ install:
 
 | Path | What it is |
 | --- | --- |
-| `Dist\OpenScene\OpenScene.exe` | The editor (WebView2 host, ~71 KB) |
-| `Dist\OpenScene-Setup.exe` | NSIS installer — Start-menu and desktop shortcuts, uninstaller |
+| `Dist\OpenScene\OpenScene.exe` | The editor (WebView2 host, ~73 KB) |
+| `Dist\OpenScene-Setup.exe` | Single-file NSIS installer — Start-menu and desktop shortcuts, uninstaller |
 | `Dist\OpenScene-portable.zip` | The same app as a portable folder; unzip and run |
 
 Requires Windows 10/11 with the WebView2 runtime (present on every up-to-date machine).
 NSIS is only needed for the installer — without it the app itself still builds.
-
-To produce the per-platform folders and the portable zip in the same pass:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\Build-AllPlatforms.ps1
-```
-
-### Android and iOS
-
-OpenScene ships the *same editor* on mobile inside thin native shells that add real file
-dialogs and real filesystem access.
-
-```powershell
-# Android: sync the web app into the shell, then build
-powershell -ExecutionPolicy Bypass -File mobile\android\sync-assets.ps1
-cd mobile\android ; gradlew.bat assembleDebug
-```
-
-```sh
-# iOS: sync, then build in Xcode
-sh mobile/ios/sync-assets.sh
-```
-
-Full requirements, the Xcode project setup and the host-bridge contract are documented in
-**[mobile/README.md](mobile/README.md)**.
 
 ### Browser / installable PWA
 
@@ -198,16 +175,18 @@ image-sequence ZIP**. Rendering a 16K frame works; encoding one as a movie is be
 platform, and OpenScene says so rather than failing halfway.
 
 ### Projects
-- **Native Open/Save dialogs** in every desktop build (Windows host, Android SAF, iOS
-  document picker).
-- Projects are `.osceneproj` files; imported media lives in IndexedDB, so reopening a
+- **Native Open/Save dialogs** in the Windows build.
+- Projects are `.oscene` files (the counterpart to OpenShot's `.osp`); imported media
+  lives in IndexedDB, so reopening a
   project restores everything automatically. If a file is gone, OpenScene offers to
   **relink** it.
+- **OpenShot projects open directly.** Dropping a `.osp` file converts its layers,
+  clips, keyframes, blend modes and filters into an OpenScene project on the spot.
 - **Autosave** every 45 seconds with a recovery prompt on the next launch.
 - Recent-projects list.
 
 ### Importing media — every format the engine can meet
-The import dialog, drag-and-drop and the mobile document pickers all accept the same
+The import dialog and drag-and-drop accept the same
 **221 extensions: 72 video, 63 audio, 86 image** — MP4/MOV/MKV/WebM/AVI/MPEG/OGV/FLV/M4V
 and friends; MP3/AAC/M4A/WAV/FLAC/OGG/Opus/WMA/AIFF and friends; JPEG/PNG/WebP/GIF/BMP/
 TIFF/HEIC/SVG/AVIF and friends, including RAW-ish and oddball containers.
@@ -293,27 +272,22 @@ native/                 the Windows host
   OpenScene.cs          WebView2 window, native dialogs, --selftest CLI
   host-bridge.js        window.openscene over chrome.webview RPC
   webview2/             the vendored WebView2 SDK used to build the host
-mobile/                 the Android and iOS shells  (see mobile/README.md)
-  host-bridge-mobile.js shared mobile bridge — the same window.openscene contract
-  android/              Gradle project, WebView + loopback server + SAF dialogs
-  ios/                  Swift sources, WKWebView + loopback server + document pickers
 icons/                  generated logo (favicon, PWA, maskable)
 resources/              generated app icon (.ico / .png), logo wordmark, installer art
 tools/OpenScene.nsi     NSIS installer script
-tools/Build-AllPlatforms.ps1  publishes the Windows/Android/iOS folders into Downloads
 Build-WindowsApp.ps1    builds Dist\OpenScene\OpenScene.exe
-Build-Installer.bat     one click: the app plus the installer
+Build-Installer.bat     one click: the app plus the single-file installer
 Run-OpenScene.bat       smart launcher (the built app, else Edge app mode)
 OpenScene-EdgeApp.cmd   zero-install Edge app-mode launcher
 ```
 
-**No build step for the app itself.** The same `index.html` is what the Windows host, both
-mobile shells and a plain browser all load — that is why one editor can ship on three
-platforms with nothing to install.
+**No build step for the app itself.** `index.html` is what the Windows host loads — the
+timeline, compositor, effects, exporter and interface are all plain files, so the editor
+builds with nothing but the .NET compiler that already ships with Windows.
 
 The logo is drawn by a stdlib-only script (System.Drawing): a rounded navy gradient badge
 with a playhead-triangle mark and filmstrip sprocket holes, rendered at every size the
-platforms need, including a maskable Android adaptive icon.
+native shell needs.
 
 ---
 
@@ -331,7 +305,7 @@ checks the model's validation negative cases, and then — for regression safety
 and `p=1` to prove none of them throws and none of them fails to reach the incoming clip.
 
 That last pair of checks is what keeps this editor's effect and transition libraries
-honest. It is currently **67 passed, 0 failed**.
+honest. It is currently **81 passed, 0 failed**.
 
 Run it from **Help ▸ Run self-test…**, launch with `#selftest` appended to the URL
 (`index.html#selftest`), or use the CLI form shown above.
@@ -341,8 +315,6 @@ Run it from **Help ▸ Run self-test…**, launch with `#selftest` appended to t
 ## Requirements
 
 - **Windows 10 or 11** (x64) with the WebView2 runtime — preinstalled on current machines.
-- **Android 7.0+** to build the Android shell (JDK 17 + Android SDK 34).
-- **macOS with Xcode 15+** to build the iOS shell.
 - Hardware H.264 encoding requires a GPU/driver that exposes it to the web engine;
   OpenScene falls back to software encoding, and then to the realtime engine,
   automatically.
@@ -351,10 +323,8 @@ Run it from **Help ▸ Run self-test…**, launch with `#selftest` appended to t
 
 ## Privacy
 
-OpenScene never makes a network request. (The Android and iOS shells open a loopback
-socket on `127.0.0.1` purely to serve the app's own files to its own WebView; nothing
-leaves the device.) Media is read from your disk, decoded in-process, and stored locally
-so projects reopen instantly. Nothing is uploaded, ever.
+OpenScene never makes a network request. Media is read from your disk, decoded
+in-process, and stored locally so projects reopen instantly. Nothing is uploaded, ever.
 
 ---
 
@@ -362,8 +332,6 @@ so projects reopen instantly. Nothing is uploaded, ever.
 
 MIT — see [LICENSE](LICENSE).
 
-OpenScene contains **no third-party runtime code** on any platform. The Windows host is
+OpenScene contains **no third-party runtime code**. The Windows host is
 built against the WebView2 SDK (vendored under `native/webview2/` for offline builds);
 the WebView2 *runtime* it drives is a Windows component, not something OpenScene ships.
-The Android and iOS shells compile against the platform SDKs only — no AndroidX, no
-Compose, no Swift packages, no CocoaPods.

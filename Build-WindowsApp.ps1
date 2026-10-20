@@ -158,7 +158,7 @@ https://go.microsoft.com/fwlink/p/?LinkId=2124703
 Keep every file in this folder together - OpenScene.exe looks for index.html, js\ and
 css\ right next to itself.
 
-Projects are plain JSON files ( *.osceneproj ) and are fully portable.
+Projects are plain JSON files ( *.oscene ) and are fully portable. OpenShot .osp projects import directly.
 
 OpenScene is free and open source software, released under the MIT licence.
 See LICENSE for details.
@@ -184,6 +184,19 @@ if ($Shortcut) {
   }
 }
 
+# ---------------------------------------------------------------- portable zip
+# One archive you can hand to somebody who does not want an installer: unzip and
+# double-click OpenScene.exe. Built from the same verified output folder.
+$zip = Join-Path (Split-Path -Parent $out) 'OpenScene-portable.zip'
+try {
+  Step 'portable   OpenScene-portable.zip'
+  if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
+  Compress-Archive -Path (Join-Path $out '*') -DestinationPath $zip -CompressionLevel Optimal -Force
+  Write-Host ("             {0:N1} MB" -f ((Get-Item -LiteralPath $zip).Length / 1MB))
+} catch {
+  Write-Host ('             skipped: ' + $_.Exception.Message) -ForegroundColor DarkYellow
+}
+
 # ---------------------------------------------------------------- report
 $exeSize = (Get-Item -LiteralPath $exe).Length
 $totalSize = (Get-ChildItem -LiteralPath $out -Recurse -File | Measure-Object -Sum Length).Sum
@@ -192,5 +205,6 @@ Write-Host 'BUILD OK' -ForegroundColor Green
 Write-Host ("  app      {0}" -f $exe)
 Write-Host ("  exe      {0:N0} bytes" -f $exeSize)
 Write-Host ("  folder   {0:N1} MB" -f ($totalSize / 1MB))
+if (Test-Path -LiteralPath $zip) { Write-Host ("  portable {0}" -f $zip) }
 Write-Host ''
 Write-Host ("Run it:   `"{0}`"" -f $exe) -ForegroundColor Cyan

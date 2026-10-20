@@ -59,10 +59,8 @@ echo.
 echo ============================================================
 echo  Done. Look in the "Dist" folder for:
 echo    OpenScene\OpenScene.exe    ^(run this^)
-echo    OpenScene-Setup.exe        ^(installer^)
-echo.
-echo  For the per-platform folders and the portable zip, run:
-echo    powershell -ExecutionPolicy Bypass -File tools\Build-AllPlatforms.ps1
+echo    OpenScene-Setup.exe        ^(single-file installer - this is the one to share^)
+echo    OpenScene-portable.zip     ^(unzip and run, no install^)
 echo ============================================================
 echo.
 pause

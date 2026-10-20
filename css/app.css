@@ -944,9 +944,65 @@ kbd {
 
 ::-webkit-scrollbar { width: 11px; height: 11px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: var(--radius); border: 2px solid var(--bg); }
+::-webkit-scrollbar-thumb {
+  background: var(--line-2);
+  border-radius: var(--radius);
+  border: 2px solid var(--bg);
+  transition: background 0.12s;
+}
 ::-webkit-scrollbar-thumb:hover { background: var(--line-3); }
 ::-webkit-scrollbar-corner { background: var(--bg); }
+/* Slimmer bars inside popovers and lists so they never crowd out the content. */
+.dialog ::-webkit-scrollbar,
+.props-scroll::-webkit-scrollbar,
+.bin-list::-webkit-scrollbar,
+.menu-pop ::-webkit-scrollbar { width: 9px; height: 9px; }
+.dialog ::-webkit-scrollbar-thumb,
+.props-scroll::-webkit-scrollbar-thumb,
+.bin-list::-webkit-scrollbar-thumb,
+.menu-pop ::-webkit-scrollbar-thumb { border-width: 2px; }
+
+/* ===================== interaction polish ===================== */
+
+/* Keyboard users get a clearly visible ring; mouse users do not, so buttons do
+   not flash a border every time they are clicked. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.btn:focus-visible,
+.btn-icon:focus-visible,
+.tl-btn:focus-visible { outline-offset: 2px; border-radius: var(--radius-s); }
+/* The fields already carry a focus ring; keep the outline off them so the two
+   indicators never stack into a doubled border. */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible { outline: none; }
+
+/* Every control settles instantly rather than snapping, but never on the
+   timeline canvas, where motion would misread as a dropped frame. */
+.btn, .btn-icon, .tab, .panel-head .btn, .menu-item, .menu-pop .item {
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
+}
+.tab:hover, .menu-item:hover, .menu-pop .item:hover { background: var(--panel-3); }
+.panel-head .btn:active, .tl-btn:active { transform: translateY(1px); }
+
+/* Dialogs fade and lift in, and their primary action is the obvious one. */
+.dialog-backdrop { animation: dlgFade 0.12s ease-out; }
+.dialog { animation: dlgRise 0.16s cubic-bezier(0.2, 0.8, 0.3, 1); }
+@keyframes dlgFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dlgRise { from { opacity: 0; transform: translateY(8px) scale(0.995); } to { opacity: 1; transform: none; } }
+
+/* Respect a user who has asked the system to cut animation. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .btn:active, .tl-btn:active { transform: none; }
+}
 
 /* ===================== boot error ===================== */
 

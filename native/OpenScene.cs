@@ -605,7 +605,9 @@ namespace OpenScene
         /* ------------------------------------------------------------------ */
 
         private const string ProjectFilter =
-            "OpenScene project (*.osceneproj)|*.osceneproj|" +
+            "OpenScene project (*.oscene)|*.oscene|" +
+            "OpenShot project (*.osp)|*.osp|" +
+            "Legacy OpenScene project (*.osceneproj)|*.osceneproj|" +
             "JSON file (*.json)|*.json|All files (*.*)|*.*";
 
         private object ProjectSave(Dictionary<string, object> args)
@@ -620,12 +622,12 @@ namespace OpenScene
                 using (SaveFileDialog dlg = new SaveFileDialog())
                 {
                     dlg.Title = "Save OpenScene project";
-                    dlg.Filter = ProjectFilter;
-                    dlg.DefaultExt = "osceneproj";
+                    dlg.Filter = "OpenScene project (*.oscene)|*.oscene|All files (*.*)|*.*";
+                    dlg.DefaultExt = "oscene";
                     dlg.AddExtension = true;
                     dlg.OverwritePrompt = true;
                     dlg.FileName = string.IsNullOrEmpty(suggested)
-                        ? "Untitled Project.osceneproj" : suggested;
+                        ? "Untitled Project.oscene" : suggested;
                     if (dlg.ShowDialog(this) != DialogResult.OK) return Canceled();
                     path = dlg.FileName;
                 }

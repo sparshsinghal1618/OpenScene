@@ -12,9 +12,23 @@
   const { el, on, withTimeout } = U;
 
   const AUTOSAVE_MS = 45_000;
-  const PROJECT_EXT = '.osceneproj';
+  /* The OpenScene project extension, the counterpart to OpenShot's .osp. Saved
+     files always get .oscene; the older .osceneproj spelling (and plain .json)
+     is still accepted on open so nothing a user already saved stops working. */
+  const PROJECT_EXT = '.oscene';
+  const LEGACY_EXTS = ['.osceneproj', '.osp', '.json'];
   const AUTOSAVE_KEY = 'autosave-current';
   const RECENTS_KEY = 'recents';
+
+  /* Strip any known project extension from a filename to get the project name. */
+  const stripExt = (name) => String(name || '').replace(/\.(oscene|osceneproj|osp|json)$/i, '');
+
+  /* Pickers offer the OpenScene extension first, then the formats we can read. */
+  const OPEN_TYPES = [
+    { description: 'OpenScene project', accept: { 'application/json': ['.oscene', '.osceneproj'] } },
+    { description: 'OpenShot project', accept: { 'application/json': ['.osp'] } },
+    { description: 'JSON project', accept: { 'application/json': ['.json'] } },
+  ];
 
   class Persist {
     constructor(app) {
@@ -65,13 +79,13 @@
           try {
             const handle = await window.showSaveFilePicker({
               suggestedName: suggested,
-              types: [{ description: 'OpenScene project', accept: { 'application/json': [PROJECT_EXT, '.json'] } }],
+              types: [{ description: 'OpenScene project', accept: { 'application/json': [PROJECT_EXT] } }],
             });
             this.currentHandle = handle;
             const w = await handle.createWritable();
             await w.write(json);
             await w.close();
-            const name = handle.name.replace(/\.(osceneproj|json)$/i, '');
+            const name = stripExt(handle.name);
             if (name) app.setProjectName(name);
             this.dirty = false; this.lastSavedAt = Date.now();
             app.setStatus('Project saved to ' + handle.name);
@@ -117,7 +131,7 @@
     async openProject(pickedJson, nameHint) {
       const app = this.app;
       try {
-        let json = pickedJson, fname = nameHint || 'Untitled Project.osceneproj';
+        let json = pickedJson, fname = nameHint || 'Untitled Project' + PROJECT_EXT;
         if (json == null) {
           if (this.native) {
             const res = await this.native.openProject();
@@ -127,10 +141,7 @@
             if (res.filePath) await this._rememberPath(res.filePath);
           } else if (window.showOpenFilePicker) {
             try {
-              const [handle] = await window.showOpenFilePicker({
-                types: [{ description: 'OpenScene project', accept: { 'application/json': [PROJECT_EXT, '.json'] } }],
-                multiple: false,
-              });
+              const [handle] = await window.showOpenFilePicker({ types: OPEN_TYPES, multiple: false });
               this.currentHandle = handle;
               const file = await handle.getFile();
               json = await file.text(); fname = handle.name;
@@ -139,10 +150,25 @@
               throw e;
             }
           } else {
-            const file = await this._pickFile('application/json,' + PROJECT_EXT + ',.json');
+            const file = await this._pickFile('application/json,.oscene,.osceneproj,.osp,.json');
             if (!file) return false;
             json = await file.text(); fname = file.name;
           }
+        }
+        // A .osp (or any file that identifies itself as an OpenShot project) is
+        // converted first so the rest of the app only ever sees our own model.
+        const parsed = typeof json === 'string' ? safeJson(json) : json;
+        if (OS.osp && OS.osp.looksLikeOpenShot(parsed)) {
+          const conv = OS.osp.toProject(parsed, stripExt(fname));
+          const project = OS.model.deserialize(conv.project);
+          await this._loadProject(project, conv.name + PROJECT_EXT);
+          const s = conv.summary;
+          app.dialogs.toast(
+            `Imported OpenShot project: ${s.clips} clip(s) on ${s.tracks} track(s)` +
+            (s.unmappedEffects ? `, ${s.unmappedEffects} effect(s) could not be mapped` : '') +
+            (s.missingMedia ? `, ${s.missingMedia} media file(s) need relinking` : '') + '.',
+            s.unmappedEffects || s.missingMedia ? 'warn' : 'info', 9000);
+          return true;
         }
         const project = OS.model.deserialize(json);
         await this._loadProject(project, fname);
@@ -156,7 +182,7 @@
 
     async _loadProject(project, fname) {
       const app = this.app;
-      project.name = fname ? fname.replace(/\.(osceneproj|json)$/i, '') : project.name || 'Untitled Project';
+      project.name = fname ? stripExt(fname) : project.name || 'Untitled Project';
       app.media.disposeAll();
       app.project = project;
       app.player.attach(project, app.media);
@@ -231,7 +257,7 @@
     /* ---------- helpers ---------- */
 
     _download(blob, filename) {
-      // iOS Safari cannot write blob: URLs to disk from a page, so hand the file
+      // Safari cannot write blob: URLs to disk from a page, so hand the file
       // to the system share sheet (Save to Files / AirDrop / Photos) when it is
       // offered. Best effort only: every failure falls back to a plain download.
       if (U.isIOS() && typeof navigator.canShare === 'function' && typeof File === 'function') {
@@ -364,5 +390,12 @@
     return files.find((f) => f.name.toLowerCase().replace(/\.[^.]+$/, '') === stem) || null;
   }
 
-  OS.persist = { Persist, PROJECT_EXT, matchFile };
+  /* A project file that is not valid JSON should read as "invalid", not as an
+     unhandled SyntaxError inside the open pipeline. */
+  function safeJson(text) {
+    try { return JSON.parse(text); }
+    catch (e) { throw new Error('that file is not a valid project (unreadable JSON)'); }
+  }
+
+  OS.persist = { Persist, PROJECT_EXT, LEGACY_EXTS, stripExt, matchFile, safeJson };
 })();

@@ -60,7 +60,7 @@
       ['M', 'Add a marker at the playhead'],
       ['Ctrl+I', 'Import media'],
       ['Ctrl+O', 'Open project'],
-      ['Ctrl+S', 'Save project (download .osceneproj)'],
+      ['Ctrl+S', 'Save project (download .oscene)'],
       ['Ctrl+E', 'Export dialog'],
       ['Ctrl+Shift+E', 'Export a still frame (PNG)'],
     ],

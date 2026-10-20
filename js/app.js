@@ -583,9 +583,12 @@
       const el2 = this.dom.statusRight;
       if (!el2) return;
       const bits = [];
+      /* The status bar names what you are actually working on: the selected
+         clip(s) first, since that is the question it answers while editing. */
+      if (sel.length === 1) bits.push(sel[0].name || 'Clip');
+      else if (sel.length > 1) bits.push(`${sel.length} clips selected`);
       bits.push(`${this.project.tracks.length} tracks`);
       bits.push(`${this.project.assets.length} media`);
-      if (sel.length) bits.push(`${sel.length} selected`);
       el2.textContent = bits.join(' · ');
     }
 
@@ -849,21 +852,54 @@
         const imported = (await this.media.importFiles(list, { tolerant: true })).filter(Boolean);
         if (prog) prog.remove();
         if (!imported.length) { this.dialogs.toast('Nothing could be imported from those files', 'warn', 7000); return; }
-        let cursor = startFrame;
+
+        /* A batch dropped together lands as ONE run of clips on ONE track.
+           Choosing a track per file used to scatter the batch across spare
+           tracks whenever the drop point touched existing media; instead the
+           run starts where there is room and every subsequent clip follows the
+           previous one on the same track. Audio-only batches do the same on
+           their own audio track, so a mixed drop never interleaves video and
+           audio rows. */
+        const runs = new Map();     // track.id -> next free frame for that track
+        const pickRun = (kind) => {
+          if (track && track.kind === kind) return track;
+          const free = this._freeTrack(kind);
+          if (!free.length) return null;
+          /* Join the video/audio row that is already in use at the drop point,
+             so a second drop extends the existing edit instead of opening a new
+             track. Only when nothing sits there do we take a spare row. */
+          const occupied = free.find((t) =>
+            M().clipsBetween(this.project, t, startFrame, startFrame + 1).length);
+          if (occupied) return occupied;
+          const bottomFirst = free.slice().reverse();
+          return bottomFirst[0];
+        };
+        /* First free frame on a track at or after `from`, appending after any
+           clip that overlaps the drop point so a batch never buries existing
+           media under itself. */
+        const roomAfter = (t, from) => {
+          const clips = M().clipsOf(this.project, t).slice().sort((a, b) => a.start - b.start);
+          let cursor = from;
+          for (const c of clips) {
+            if (c.start < cursor && M().clipEnd(c) > cursor) cursor = M().clipEnd(c);
+          }
+          return cursor;
+        };
+
         let last = null;
         this.group(imported.length > 1 ? `Import ${imported.length} items` : `Import ${imported[0].name}`, () => {
           for (const a of imported) {
             this.commands.execInGroup('Import', OS.commands.AddAsset(this.project, a));
             if (a.undecodable) continue;   // no timeline length to honour yet
-            const len = this.defaultClipLength(a);
             const kind = a.kind === 'audio' ? 'audio' : 'video';
-            const target = (track && track.kind === kind) ? track : this._pickTrack(kind, cursor, len);
-            if (target) {
-              const clip = M().createClip(a, target.id, cursor, len);
-              this.commands.execInGroup('Place', OS.commands.AddClips(this.project, [clip]));
-              last = clip;
-              cursor += len;
-            }
+            const target = pickRun(kind);
+            if (!target) continue;
+            const cursor = runs.has(target.id) ? runs.get(target.id) : roomAfter(target, startFrame);
+            const len = this.defaultClipLength(a);
+            const clip = M().createClip(a, target.id, cursor, len);
+            this.commands.execInGroup('Place', OS.commands.AddClips(this.project, [clip]));
+            runs.set(target.id, cursor + len);
+            last = clip;
           }
         });
         this.bin.refresh();

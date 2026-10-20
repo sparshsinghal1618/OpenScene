@@ -79,6 +79,18 @@ html, body { overscroll-behavior: none; }
   .mbar-btn.on { background: var(--accent-soft); border-color: var(--accent); color: #fff; }
   .mbar-btn:active { background: var(--panel-3); }
   .mbar-btn.playing svg { stroke: var(--ok); }
+  /* A finger is not a mouse: every tap target clears 36px in both directions. */
+  .mbar-btn, .tl-btn, .dock-tab, .tbtn, .btn, .btn-icon { min-height: 36px; }
+  .btn-icon { min-width: 36px; }
+  /* No hover on touch, so pressed feedback has to be immediate and obvious. */
+  .mbar-btn:active, .tl-btn:active, .btn:active, .dock-tab:active,
+  .lib-item:active, .menu-item:active, .context-item:active { background: var(--panel-3); }
+  /* Momentum scrolling everywhere a list can overflow. */
+  .bin-grid, .bin-list, .lib-cats, .props-scroll, .modal-body, .export-left {
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Sticky headings inside the scrolling dialogs keep their title in view. */
+  .modal-head { position: sticky; top: 0; z-index: 2; background: var(--panel); }
 
   /* ---------- menu bar ---------- */
 
@@ -186,9 +198,18 @@ html, body { overscroll-behavior: none; }
   .mbar-btn svg { width: 17px; height: 17px; }
 }
 
-/* Timeline maximised (toggled from the mobile bar). */
+/* Timeline maximised (toggled from the mobile bar). The middle band is removed
+   from the grid outright — leaving it as a collapsed 1fr row would still eat
+   part of the height the timeline is supposed to reclaim. */
 @media (max-width: 900px) {
   #app.tl-max { --tl-h: 62vh; }
   #app.tl-max #main { display: none; }
   #app.tl-max #splitTimeline { display: none; }
+  /* With the pane gone the timeline takes every pixel of the free row. */
+  #app.tl-max {
+    grid-template-rows:
+      calc(var(--menubar-h) + var(--sat))
+      0 6px minmax(0, 1fr) var(--mbar-h) calc(var(--status-h) + var(--sab));
+  }
+  #app.tl-max .splitter { display: none; }
 }

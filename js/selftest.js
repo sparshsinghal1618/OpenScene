@@ -718,6 +718,78 @@
           log('audio: per-clip EQ changes the mixdown', Math.abs(before - after) / Math.max(before, after, 1e-6) > 0.03, `flat=${before.toFixed(4)} eq=${after.toFixed(4)}`);
         } catch (e) { log('audio: per-clip EQ changes the mixdown', false, e.message); }
       }
+
+      /* 15 — the project extension and its legacy spellings */
+      try {
+        const P = OS.persist;
+        log('project: the extension is .oscene', P.PROJECT_EXT === '.oscene', P.PROJECT_EXT);
+        const strip = ['film.oscene', 'old.osceneproj', 'shot.osp', 'plain.json'].map((n) => P.stripExt(n));
+        log('project: legacy extensions still strip to a plain name',
+          strip[0] === 'film' && strip[1] === 'old' && strip[2] === 'shot' && strip[3] === 'plain',
+          strip.join(','));
+      } catch (e) { log('project: the extension is .oscene', false, e.message); }
+
+      /* 16 — OpenShot .osp conversion: layers, clips, keyframes, filters, mixes */
+      try {
+        const doc = {
+          version: { 'openshot-qt': '3.1.1', libopenshot: '0.3.2' },
+          width: 1920, height: 1080, fps: { num: 25, den: 1 }, sample_rate: 48000,
+          layers: [
+            { id: 'L2', number: 2000000, label: 'Over', lock: true },
+            { id: 'L1', number: 1000000, label: 'Main' },
+          ],
+          files: [
+            { id: 'f1', path: 'C:/m/a.mp4', media_type: 'video', width: 3840, height: 2160, duration: 10, has_video: true, has_audio: true, channels: 2 },
+            { id: 'f2', path: 'C:/m/b.wav', media_type: 'audio', duration: 20, has_video: false, has_audio: true, channels: 2 },
+          ],
+          clips: [
+            { id: 'c1', layer: 1000000, position: 0, start: 0, end: 6, file_id: 'f1', title: 'A', mixing: 4,
+              alpha: { Points: [{ co: { X: 1, Y: 0.5 } }, { co: { X: 100, Y: 1 } }] },
+              effects: [{ type: 'Saturation', properties: { saturation: { value: 1.4 } } }, { type: 'Tracker', properties: {} }] },
+            { id: 'c2', layer: 1000000, position: 8, start: 0, end: 20, file_id: 'f2' },
+            { id: 'c3', layer: 2000000, position: 2, start: 0, end: 4, file_id: 'f1', mixing: 3 },
+          ],
+          markers: [{ position: 3, name: 'Beat' }],
+        };
+        log('osp: an OpenShot document is recognised', OS.osp.looksLikeOpenShot(doc));
+        log('osp: our own project is not mistaken for OpenShot',
+          !OS.osp.looksLikeOpenShot({ tracks: [], version: 1 }));
+        const conv = OS.osp.toProject(doc, 'Converted');
+        const p = conv.project;
+        log('osp: project size, rate and sample rate are carried over',
+          p.width === 1920 && p.height === 1080 && p.fps.rate === 25 && p.sampleRate === 48000,
+          `${p.width}x${p.height} @${p.fps.rate} ${p.sampleRate}Hz`);
+        const all = [];
+        for (const t of p.tracks) for (const c of t.clips) all.push({ c, t });
+        log('osp: every clip is converted', conv.summary.clips === 3 && all.length === 3, String(conv.summary.clips));
+        log('osp: audio lands on an audio track and video on video',
+          all.every(({ c, t }) => (c.assetId && M().findAsset(p, c.assetId).kind === 'audio') === (t.kind === 'audio')),
+          all.map(({ t }) => t.kind).join(','));
+        const a = all.find(({ c }) => c.name === 'A').c;
+        log('osp: keyframes are re-timed onto the clip',
+          (a.keyframes.opacity || []).length === 2 && a.keyframes.opacity[1].value === 1,
+          JSON.stringify(a.keyframes.opacity));
+        log('osp: blend modes and mappable filters survive',
+          a.blend === 'multiply' && a.effects.length === 1 && a.effects[0].type === 'saturation',
+          `${a.blend} / ${a.effects.map((f) => f.type).join(',') || 'none'}`);
+        log('osp: unmappable filters are counted, not dropped silently',
+          conv.summary.unmappedEffects === 1, String(conv.summary.unmappedEffects));
+        log('osp: markers are converted', p.markers.length === 1 && p.markers[0].label === 'Beat');
+        log('osp: the converted project validates', M().validate(p).length === 0, M().validate(p).join(' | '));
+        const back = M().deserialize(M().serialize(p));
+        log('osp: the converted project survives a save/open round trip',
+          back.tracks.reduce((n, t) => n + (t.clips || []).length, 0) === 3 && M().validate(back).length === 0);
+      } catch (e) { log('osp: an OpenShot document is recognised', false, e.message); }
+
+      /* 17 — peaks decoding is bounded so a large video can never wedge an import */
+      try {
+        const big = new File([new Uint8Array(4)], 'movie.mp4', { type: 'video/mp4' });
+        Object.defineProperty(big, 'size', { value: 400 * 1024 * 1024 });
+        const t0p = performance.now();
+        const res = await OS.media.computePeaks(big);
+        log('media: a huge video is not decoded for peaks',
+          !!res.skipped && performance.now() - t0p < 1000, `${Math.round(performance.now() - t0p)}ms skipped=${!!res.skipped}`);
+      } catch (e) { log('media: a huge video is not decoded for peaks', false, e.message); }
     } catch (e) {
       log('self-test: unexpected failure', false, e.stack || e.message);
     }
