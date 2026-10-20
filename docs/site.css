@@ -265,6 +265,8 @@ p  { margin: 0 0 1em; color: var(--ink-2); }
 .dl-alt li::before { content: "→"; position: absolute; left: 0; color: var(--brand); }
 .dl-alt b { color: var(--ink); }
 .dl-alt code { color: var(--brand); }
+.inline-link { color: var(--brand); text-decoration: underline; text-underline-offset: 2px; }
+.inline-link:hover { color: #7dd3fc; }
 
 .cmd { margin-top: 18px; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: #0c1018; }
 .cmd-head { padding: 10px 16px; font-size: .8rem; color: var(--ink-3); background: #111722; border-bottom: 1px solid var(--line-soft); text-transform: uppercase; letter-spacing: .07em; }
