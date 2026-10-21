@@ -2375,5 +2375,9 @@
   }
   function ensure(c, w, h) { if (c.width !== w || c.height !== h) { c.width = w; c.height = h; } }
 
-  OS.transitions = { TYPES, labelOf, groupOf, descOf, defaultType, draw, makeScratch };
+  /* FAMILY is exported so custom transitions (js/customtrans.js) can register
+     renderers into the same table the built-ins use. One registry means the
+     timeline preview, the library thumbnails and the exporter all see custom
+     transitions with no extra wiring. */
+  OS.transitions = { TYPES, labelOf, groupOf, descOf, defaultType, draw, makeScratch, FAMILY };
 })();

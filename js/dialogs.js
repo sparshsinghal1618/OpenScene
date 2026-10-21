@@ -646,6 +646,343 @@
       api.foot.append(el('span.spacer'), this.button('Close', () => api.close(), 'primary'));
     }
 
+    /* ---------- custom transitions ---------- */
+
+    /* The editor for user-authored transitions. Two tabs: a parameter builder
+       that needs no code, and a script editor for anything the builder cannot
+       express. A live preview renders the transition at the current progress so
+       the result is visible before it is saved. */
+    customTransitions() {
+      const CT = OS.customTrans;
+      if (!CT) { this.toast('Custom transitions are not available', 'error'); return; }
+
+      const content = el('div.ct');
+      const state = {
+        mode: 'spec',
+        id: null,
+        spec: CT.defaults(),
+        script: [
+          '/* Runs once per frame. A = outgoing clip, B = incoming clip.',
+          '   p goes 0 -> 1. The preview above shows the result live.',
+          '   p=0 and p=1 are forced to show A and B exactly,',
+          '   so this only has to make the middle look right. */',
+          '',
+          'ctx.drawImage(A, 0, 0);',
+          'const k = Math.sin(p * Math.PI);',
+          'ctx.globalAlpha = p;',
+          'ctx.drawImage(B, 0, 0);',
+          'ctx.globalAlpha = 1;',
+        ].join('\n'),
+        preview: 0.5,
+      };
+
+      /* ----- preview ----- */
+      const PREVIEW_W = 240, PREVIEW_H = 135;
+      const canvas = el('canvas.ct-preview', { width: PREVIEW_W, height: PREVIEW_H });
+      const pctx = canvas.getContext('2d');
+
+      const makeSwatch = (kind) => {
+        const c = document.createElement('canvas');
+        c.width = PREVIEW_W; c.height = PREVIEW_H;
+        const x = c.getContext('2d');
+        if (kind === 'A') {
+          const g = x.createLinearGradient(0, 0, PREVIEW_W, PREVIEW_H);
+          g.addColorStop(0, '#26405f'); g.addColorStop(1, '#0f1b2b');
+          x.fillStyle = g; x.fillRect(0, 0, PREVIEW_W, PREVIEW_H);
+          x.fillStyle = 'rgba(255,255,255,.85)';
+          x.font = 'bold 46px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+          x.fillText('A', PREVIEW_W / 2, PREVIEW_H / 2);
+        } else {
+          const g = x.createLinearGradient(0, 0, PREVIEW_W, PREVIEW_H);
+          g.addColorStop(0, '#a34a1e'); g.addColorStop(1, '#5c2410');
+          x.fillStyle = g; x.fillRect(0, 0, PREVIEW_W, PREVIEW_H);
+          x.fillStyle = 'rgba(255,255,255,.9)';
+          x.font = 'bold 46px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+          x.fillText('B', PREVIEW_W / 2, PREVIEW_H / 2);
+        }
+        return c;
+      };
+      const SWATCH_A = makeSwatch('A');
+      const SWATCH_B = makeSwatch('B');
+
+      let scratch = CT.compile ? null : null;
+      const getScratch = () => {
+        if (!scratch) {
+          const layerA = document.createElement('canvas');
+          const layerB = document.createElement('canvas');
+          const mask = document.createElement('canvas');
+          scratch = { layerA, layerB, mask };
+        }
+        return scratch;
+      };
+
+      const renderPreview = () => {
+        const s = getScratch();
+        const paint = (c, src) => {
+          if (c.width !== PREVIEW_W || c.height !== PREVIEW_H) { c.width = PREVIEW_W; c.height = PREVIEW_H; }
+          const cx = c.getContext('2d');
+          cx.clearRect(0, 0, PREVIEW_W, PREVIEW_H);
+          cx.drawImage(src, 0, 0);
+        };
+        paint(s.layerA, SWATCH_A);
+        paint(s.layerB, SWATCH_B);
+
+        let cfg;
+        if (state.mode === 'spec') {
+          cfg = CT.compile(state.spec);
+        } else {
+          const r = CT.compileScript(state.script);
+          if (r.error) {
+            status.textContent = r.error;
+            status.classList.add('bad');
+            pctx.clearRect(0, 0, PREVIEW_W, PREVIEW_H);
+            pctx.drawImage(SWATCH_A, 0, 0);
+            return;
+          }
+          cfg = r.fn;
+        }
+        status.classList.remove('bad');
+        status.textContent = state.mode === 'script' ? 'Runs correctly.' : 'Preview updated.';
+        pctx.clearRect(0, 0, PREVIEW_W, PREVIEW_H);
+        cfg(pctx, s.layerA, s.layerB, PREVIEW_W, PREVIEW_H, state.preview, s);
+        pctx.globalAlpha = 1;
+        pctx.filter = 'none';
+      };
+
+      const status = el('div.ct-status');
+
+      /* progress slider + endpoint buttons */
+      const prog = el('input.ct-range', { type: 'range', min: '0', max: '1', step: '0.01', value: String(state.preview) });
+      on(prog, 'input', () => { state.preview = parseFloat(prog.value); renderPreview(); });
+
+      const previewBox = el('div.ct-preview-box', {}, [
+        canvas,
+        el('div.ct-preview-controls', {}, [
+          el('button.btn.small', { text: 'A', title: 'Show the outgoing clip (p=0)', onclick: () => { state.preview = 0; prog.value = '0'; renderPreview(); } }),
+          prog,
+          el('button.btn.small', { text: 'B', title: 'Show the incoming clip (p=1)', onclick: () => { state.preview = 1; prog.value = '1'; renderPreview(); } }),
+        ]),
+        status,
+      ]);
+
+      /* ----- parameter controls ----- */
+      const paramBox = el('div.ct-params');
+      const controls = new Map();
+
+      const buildParams = () => {
+        paramBox.innerHTML = '';
+        controls.clear();
+        for (const [key, label, type, def, extra] of CT.PATTERN) {
+          /* A parameter that the chosen family ignores is hidden, so the form
+             only shows what actually has an effect. */
+          const fam = state.spec.family;
+          const relevant = {
+            angle: ['wipe', 'slide', 'blinds'],
+            softness: ['wipe', 'iris', 'blinds'],
+            bands: ['blinds', 'checker'],
+            originX: ['zoom', 'iris'],
+            originY: ['zoom', 'iris'],
+            color: ['wipe', 'iris'],
+            border: ['wipe'],
+          }[key];
+          if (relevant && !relevant.includes(fam)) continue;
+
+          const row = el('div.ct-row');
+          row.appendChild(el('label.ct-label', { text: label }));
+          let input;
+          if (type === 'range') {
+            input = el('input.ct-range', { type: 'range', min: String(extra.min), max: String(extra.max), step: String(extra.step), value: String(state.spec[key]) });
+            const out = el('span.ct-val', { text: String(state.spec[key]) + (extra.unit || '') });
+            on(input, 'input', () => {
+              state.spec[key] = parseFloat(input.value);
+              out.textContent = String(state.spec[key]) + (extra.unit || '');
+              renderPreview();
+            });
+            row.append(input, out);
+          } else if (type === 'select') {
+            input = el('select.ct-select');
+            for (const [v, t] of extra.options) {
+              const o = el('option', { value: v, text: t });
+              if (state.spec[key] === v) o.selected = true;
+              input.appendChild(o);
+            }
+            on(input, 'change', () => {
+              state.spec[key] = input.value;
+              /* family changes which parameters apply, so rebuild the form */
+              if (key === 'family') { buildParams(); }
+              renderPreview();
+            });
+            row.appendChild(input);
+          } else if (type === 'color') {
+            input = el('input.ct-color', { type: 'color', value: state.spec[key] });
+            on(input, 'input', () => { state.spec[key] = input.value; renderPreview(); });
+            row.appendChild(input);
+          } else if (type === 'check') {
+            input = el('input.ct-check', { type: 'checkbox' });
+            input.checked = !!state.spec[key];
+            on(input, 'change', () => { state.spec[key] = input.checked; renderPreview(); });
+            row.appendChild(input);
+          }
+          controls.set(key, input);
+          paramBox.appendChild(row);
+        }
+      };
+
+      const syncFormToState = () => {
+        for (const [key, input] of controls) {
+          const v = state.spec[key];
+          if (input.type === 'checkbox') input.checked = !!v;
+          else input.value = String(v);
+        }
+      };
+
+      /* ----- script editor ----- */
+      const scriptArea = el('textarea.ct-script', { spellcheck: 'false' });
+      scriptArea.value = state.script;
+      on(scriptArea, 'input', () => {
+        state.script = scriptArea.value;
+        renderPreview();
+      });
+
+      const paneSpec = el('div.ct-pane');
+      const paneScript = el('div.ct-pane');
+      paneSpec.append(paramBox);
+      paneScript.append(
+        el('p.ct-hint', { text: 'Write the body of a function. It receives (ctx, A, B, w, h, p, scratch). Use only drawing calls - the page and the network are off limits.' }),
+        scriptArea,
+      );
+      paneScript.style.display = 'none';
+
+      const tabSpec = el('button.ct-tab.on', { text: 'Builder' });
+      const tabScript = el('button.ct-tab', { text: 'Script' });
+      const setMode = (m) => {
+        state.mode = m;
+        tabSpec.classList.toggle('on', m === 'spec');
+        tabScript.classList.toggle('on', m === 'script');
+        paneSpec.style.display = m === 'spec' ? '' : 'none';
+        paneScript.style.display = m === 'script' ? '' : 'none';
+        renderPreview();
+      };
+      on(tabSpec, 'click', () => setMode('spec'));
+      on(tabScript, 'click', () => setMode('script'));
+
+      /* ----- name + group ----- */
+      const nameInput = el('input.text-input', { value: '', placeholder: 'My transition' });
+      const groupInput = el('input.text-input', { value: 'Custom', placeholder: 'Custom' });
+      const descInput = el('input.text-input', { value: '', placeholder: 'What this transition does' });
+
+      /* ----- the saved list ----- */
+      const listBox = el('div.ct-list');
+      const refreshList = () => {
+        listBox.innerHTML = '';
+        const items = CT.list();
+        if (!items.length) {
+          listBox.appendChild(el('div.ct-empty', { text: 'No custom transitions yet.' }));
+          return;
+        }
+        for (const e of items) {
+          const row = el('div.ct-list-row');
+          row.append(
+            el('span.ct-list-name', { text: e.name }),
+            el('span.ct-list-kind', { text: e.kind === 'script' ? 'script' : 'builder' }),
+          );
+          const edit = el('button.btn.small', { text: 'Edit', onclick: () => {
+            state.id = e.id;
+            state.mode = e.kind === 'script' ? 'script' : 'spec';
+            state.spec = e.kind === 'script' ? CT.defaults() : Object.assign(CT.defaults(), e.spec || {});
+            state.script = e.script || '';
+            nameInput.value = e.name;
+            groupInput.value = e.group || 'Custom';
+            descInput.value = e.description || '';
+            scriptArea.value = state.script;
+            buildParams();
+            syncFormToState();
+            setMode(state.mode);
+            tabScript.classList.toggle('on', state.mode === 'script');
+          } });
+          const del = el('button.btn.small.danger', { text: 'Delete', onclick: () => {
+            CT.remove(e.id);
+            CT.save();
+            CT.refreshPanels();
+            if (state.id === e.id) state.id = null;
+            refreshList();
+            this.toast('Custom transition deleted');
+          } });
+          row.append(el('span.spacer'), edit, del);
+          listBox.appendChild(row);
+        }
+      };
+
+      /* ----- save / update ----- */
+      const saveCurrent = () => {
+        const name = nameInput.value.trim();
+        if (!name) { this.toast('Give the transition a name', 'error'); return false; }
+        if (state.mode === 'script') {
+          const err = CT.validateScript(state.script);
+          if (err) { this.toast(err, 'error'); return false; }
+        }
+        const r = CT.add({
+          id: state.id || undefined,
+          name,
+          group: groupInput.value.trim() || 'Custom',
+          description: descInput.value.trim(),
+          kind: state.mode === 'script' ? 'script' : 'spec',
+          spec: state.spec,
+          script: state.script,
+        });
+        if (r.error) { this.toast(r.error, 'error'); return false; }
+        state.id = r.entry.id;
+        CT.save();
+        CT.refreshPanels();
+        refreshList();
+        this.toast('Custom transition saved');
+        return true;
+      };
+
+      /* keyboard: Ctrl+S saves without touching the mouse */
+      on(content, 'keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveCurrent(); }
+      });
+
+      /* ----- assemble ----- */
+      content.append(
+        el('div.ct-head', {}, [
+          el('div.ct-tabs', {}, [tabSpec, tabScript]),
+          previewBox,
+        ]),
+        el('div.ct-body', {}, [
+          el('div.ct-form', {}, [
+            el('div.ct-row', {}, [el('label.ct-label', { text: 'Name' }), nameInput]),
+            el('div.ct-row', {}, [el('label.ct-label', { text: 'Group' }), groupInput]),
+            el('div.ct-row', {}, [el('label.ct-label', { text: 'Description' }), descInput]),
+            paneSpec,
+            paneScript,
+          ]),
+          el('div.ct-side', {}, [
+            el('div.ct-side-title', { text: 'Your transitions' }),
+            listBox,
+          ]),
+        ]),
+      );
+
+      const api = this.open('Custom transitions', content, { wide: true });
+      const reset = this.button('New', () => {
+        state.id = null; state.mode = 'spec';
+        state.spec = CT.defaults();
+        nameInput.value = ''; groupInput.value = ''; descInput.value = '';
+        buildParams(); syncFormToState(); setMode('spec'); refreshList();
+      });
+      const save = this.button('Save', () => saveCurrent(), 'primary');
+      api.foot.append(reset, el('span.spacer'), this.button('Close', () => api.close()), save);
+
+      buildParams();
+      refreshList();
+      renderPreview();
+      /* The preview needs real dimensions before the first paint, so run it
+         again after the modal is in the document. */
+      requestAnimationFrame(renderPreview);
+    }
+
     about() {
       const app = this.app;
       const content = el('div.about');

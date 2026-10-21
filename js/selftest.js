@@ -790,6 +790,168 @@
         log('media: a huge video is not decoded for peaks',
           !!res.skipped && performance.now() - t0p < 1000, `${Math.round(performance.now() - t0p)}ms skipped=${!!res.skipped}`);
       } catch (e) { log('media: a huge video is not decoded for peaks', false, e.message); }
+
+      /* 18 — custom transitions register into the built-in registry and honour
+         the endpoint contract (p=0 is exactly A, p=1 is exactly B) */
+      try {
+        const CT = OS.customTrans;
+        const T = OS.transitions;
+        const countBefore = T.TYPES.length;
+
+        const r = CT.add({
+          name: 'Test wipe',
+          group: 'Custom',
+          kind: 'spec',
+          spec: { family: 'wipe', angle: 90, softness: 0.2 },
+        });
+        log('custom transitions: a builder transition is created', !r.error && !!r.entry, r.error || '');
+
+        const key = CT.KEY(r.entry.id);
+        log('custom transitions: it appears in the live transition list',
+          T.TYPES.some((t) => t[0] === key) && T.TYPES.length === countBefore + 1,
+          `${countBefore} -> ${T.TYPES.length}`);
+        log('custom transitions: its renderer is in the shared FAMILY table',
+          typeof T.FAMILY[key] === 'function');
+
+        /* Endpoint exactness. This is the property that keeps a custom
+           transition from flashing at the cut, and it is the one thing a user
+           cannot check by eye. */
+        const w = 64, h = 36;
+        const mk = (fill) => {
+          const c = document.createElement('canvas');
+          c.width = w; c.height = h;
+          const x = c.getContext('2d');
+          x.fillStyle = fill; x.fillRect(0, 0, w, h);
+          return c;
+        };
+        const A = mk('#ff0000'), B = mk('#0000ff');
+        const out = document.createElement('canvas');
+        out.width = w; out.height = h;
+        const octx = out.getContext('2d');
+        const scratch = T.makeScratch();
+
+        const render = (p) => renderPixel(octx, w, h, T, key, p, A, B, scratch);
+        const at0 = render(0), at1 = render(1), atMid = render(0.5);
+        log('custom transitions: p=0 renders exactly the outgoing clip',
+          at0[0] === 255 && at0[1] === 0 && at0[2] === 0 && at0[3] === 255, at0.join(','));
+        log('custom transitions: p=1 renders exactly the incoming clip',
+          at1[0] === 0 && at1[1] === 0 && at1[2] === 255 && at1[3] === 255, at1.join(','));
+        log('custom transitions: the midpoint is a blend, not an endpoint',
+          atMid.join(',') !== at0.join(',') && atMid.join(',') !== at1.join(','), atMid.join(','));
+
+        /* Every family must satisfy the contract, since the endpoints are the
+           only frames guaranteed to be tested by eye on a real edit. */
+        let allFamiliesExact = true;
+        const failedFamilies = [];
+        for (const [value] of CT.PATTERN.find((p) => p[0] === 'family')[4].options) {
+          const rr = CT.add({ name: 'fam ' + value, kind: 'spec', spec: { family: value, bands: 6 } });
+          if (rr.error) { allFamiliesExact = false; failedFamilies.push(value + ':' + rr.error); continue; }
+          const k2 = CT.KEY(rr.entry.id);
+          const at = (p) => renderPixel(octx, w, h, T, k2, p, A, B, scratch).join(',');
+          if (at(0) !== at0.join(',') || at(1) !== at1.join(',')) {
+            allFamiliesExact = false;
+            failedFamilies.push(value);
+          }
+          CT.remove(rr.entry.id);
+        }
+        log('custom transitions: every builder family is exact at both endpoints',
+          allFamiliesExact, failedFamilies.join(' | '));
+
+        /* Script path: a valid body compiles, and the guard rejects the two
+           classes of mistake that would otherwise surface at render time. */
+        log('custom transitions: a valid script compiles',
+          !CT.validateScript('ctx.drawImage(A, 0, 0); if (p > 0.5) { ctx.globalAlpha = p; ctx.drawImage(B, 0, 0); }'));
+        log('custom transitions: a syntax error is reported, not thrown',
+          !!CT.validateScript('ctx.drawImage(A, 0, 0'));
+        log('custom transitions: page and network access is refused',
+          !!CT.validateScript('fetch("http://example.com")') &&
+          !!CT.validateScript('document.body.innerHTML = ""'));
+        const sr = CT.add({
+          name: 'Test script',
+          kind: 'script',
+          script: 'ctx.drawImage(A, 0, 0); ctx.globalAlpha = p; ctx.drawImage(B, 0, 0); ctx.globalAlpha = 1;',
+        });
+        log('custom transitions: a scripted transition is created', !sr.error, sr.error || '');
+        if (!sr.error) {
+          const k3 = CT.KEY(sr.entry.id);
+          const s0 = renderPixel(octx, w, h, T, k3, 0, A, B, scratch);
+          const s1 = renderPixel(octx, w, h, T, k3, 1, A, B, scratch);
+          log('custom transitions: a script is forced exact at the endpoints',
+            s0.join(',') === at0.join(',') && s1.join(',') === at1.join(','),
+            `${s0.join(',')} / ${s1.join(',')}`);
+          CT.remove(sr.entry.id);
+        }
+
+        /* A throwing script must degrade to a dissolve, not kill the frame. */
+        const bad = CT.add({ name: 'Thrower', kind: 'script', script: 'ctx.drawImage(A, 0, 0); throw new Error("boom");' });
+        let survived = true;
+        if (!bad.error) {
+          try {
+            renderPixel(octx, w, h, T, CT.KEY(bad.entry.id), 0.5, A, B, scratch);
+          } catch (e) { survived = false; }
+          CT.remove(bad.entry.id);
+        }
+        log('custom transitions: a throwing script falls back instead of aborting the frame', survived);
+
+        CT.remove(r.entry.id);
+        log('custom transitions: removing one restores the original count',
+          T.TYPES.length === countBefore && !T.FAMILY[key], String(T.TYPES.length));
+      } catch (e) { log('custom transitions: a builder transition is created', false, e.stack || e.message); }
+
+      /* 19 — workspace presets apply to the real layout and survive a reload */
+      try {
+        const W = OS.workspaces;
+        const main = document.getElementById('main');
+        const appEl = document.getElementById('app');
+
+        log('workspaces: built-in presets exist', W.BUILTIN.length >= 5, String(W.BUILTIN.length));
+
+        /* Apply a preset and confirm the CSS custom properties that actually
+           drive the layout were changed - not just internal state. */
+        const target = W.byId('builtin:assembly');
+        W.apply(target.layout, app);
+        const binW = parseFloat(getComputedStyle(main).getPropertyValue('--bin-w'));
+        const tlH = parseFloat(getComputedStyle(appEl).getPropertyValue('--tl-h'));
+        log('workspaces: applying a preset writes the left dock width',
+          Math.abs(binW - target.layout.binW) < 1.5, `${binW} vs ${target.layout.binW}`);
+        log('workspaces: applying a preset writes the timeline height',
+          Math.abs(tlH - target.layout.tlH) < 1.5, `${tlH} vs ${target.layout.tlH}`);
+
+        /* A preset must be able to hide a panel, and readLayout must see that. */
+        W.apply({ dockLeft: false, propsPanel: false, binW: 300, propsW: 300, tlH: 260 }, app);
+        const read = W.readLayout(app);
+        log('workspaces: hidden panels are recorded when the layout is read',
+          read.dockLeft === false && read.propsPanel === false, JSON.stringify(read).slice(0, 90));
+        W.apply({ dockLeft: true, propsPanel: true, binW: 268, propsW: 322, tlH: 300 }, app);
+
+        /* Round trip: save the current layout, read it back, and check the
+           numbers survived. This is what makes a saved workspace trustworthy. */
+        const saved = W.saveAs('selftest-preset', app);
+        log('workspaces: a user preset can be saved', !saved.error && !!saved.preset, saved.error || '');
+        if (!saved.error) {
+          const found = W.byId(saved.preset.id);
+          log('workspaces: the saved preset keeps its geometry',
+            !!found && found.layout.binW === read.binW && found.layout.tlH === read.tlH,
+            found ? JSON.stringify(found.layout).slice(0, 90) : 'missing');
+          log('workspaces: a saved preset can be renamed', W.rename(saved.preset.id, 'renamed-preset'));
+          log('workspaces: a saved preset can be deleted', W.remove(saved.preset.id));
+          log('workspaces: a built-in preset cannot be deleted', W.remove('builtin:assembly') === false);
+        }
+
+        /* Out-of-range values must be clamped, or a corrupted store could push
+           the layout into an unusable state. */
+        W.apply({ binW: -9999, propsW: 999999, tlH: 0 }, app);
+        const cl = W.readLayout(app);
+        log('workspaces: absurd geometry is clamped to the legal range',
+          cl.binW >= W.LIMITS.binW[0] && cl.propsW <= W.LIMITS.propsW[1] && cl.tlH >= W.LIMITS.tlH[0],
+          `binW=${cl.binW} propsW=${cl.propsW} tlH=${cl.tlH}`);
+
+        W.reset(app);
+        const afterReset = W.readLayout(app);
+        log('workspaces: reset returns the layout to the defaults',
+          Math.abs(afterReset.binW - W.DEFAULTS.binW) < 1.5 && afterReset.dockLeft === true,
+          JSON.stringify(afterReset).slice(0, 90));
+      } catch (e) { log('workspaces: built-in presets exist', false, e.stack || e.message); }
     } catch (e) {
       log('self-test: unexpected failure', false, e.stack || e.message);
     }
@@ -816,6 +978,14 @@
       jobs.push(media.seekPrimary(clip.assetId, M().mediaFrameAt(clip, frame), project.fps.rate).catch(() => null));
     }
     if (jobs.length) await Promise.all(jobs);
+  }
+
+  /* Renders one frame of a transition and returns a single pixel, so an
+     endpoint can be compared byte-for-byte against the source clip. */
+  function renderPixel(ctx, w, h, T, type, p, A, B, scratch) {
+    ctx.clearRect(0, 0, w, h);
+    T.draw(ctx, w, h, type, p, (c) => c.drawImage(A, 0, 0), (c) => c.drawImage(B, 0, 0), scratch);
+    return Array.from(ctx.getImageData(Math.floor(w / 2), Math.floor(h / 2), 1, 1).data);
   }
 
   OS.selftest = { run, makeVideo, makeAudio, makeImage };

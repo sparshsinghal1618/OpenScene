@@ -16,7 +16,10 @@
 
   class App {
     constructor() {
-      this.VERSION = '1.0.0';
+      /* Kept in step with the git tag and the GitHub release. Shown in the
+         About dialog and written into every saved project file, so it must not
+         disagree with what was actually shipped. */
+      this.VERSION = '1.1.0';
       this.events = new U.Emitter();
       this.previewScale = 1;
       this.clipboard = null;
@@ -413,10 +416,47 @@
         { label: 'Project Files panel', action: () => this.showDock('binPanel') },
         { label: 'Transitions panel', action: () => this.showDock('transitionsPanel') },
         { label: 'Effects panel', action: () => this.showDock('effectsPanel') },
+        { label: 'Custom transitions\u2026', action: () => this.customTransitionsDialog() },
         { sep: true },
         { label: 'Toggle library dock', action: () => this._togglePanel('dockLeft') },
         { label: 'Toggle properties', action: () => this._togglePanel('propsPanel') },
+        { sep: true },
+        { label: 'Workspaces', submenu: this._workspaceMenu() },
       ];
+    }
+
+    /* Workspace presets. Built-ins plus anything the user saved, with the
+       actions that manage them at the bottom. */
+    _workspaceMenu() {
+      const W = OS.workspaces;
+      if (!W) return [];
+      const items = W.menuItems(this);
+      items.push({ sep: true });
+      items.push({ label: 'Save current layout as\u2026', action: () => this.saveWorkspaceDialog() });
+      const active = W.activeId ? W.byId(W.activeId) : null;
+      if (active && !active.builtin) {
+        items.push({ label: 'Update "' + active.name + '"', action: () => {
+          const r = W.updateActive(this);
+          if (r.error) this.dialogs.toast(r.error, 'error'); else this.dialogs.toast('Workspace updated');
+        } });
+        items.push({ label: 'Delete "' + active.name + '"', action: () => {
+          if (W.remove(active.id)) this.dialogs.toast('Workspace deleted');
+        } });
+      }
+      items.push({ sep: true });
+      items.push({ label: 'Reset layout', action: () => W.reset(this) });
+      return items;
+    }
+
+    /* Promotion for a prompt, so the workspace name can be typed. */
+    async saveWorkspaceDialog() {
+      const W = OS.workspaces;
+      if (!W) return;
+      const name = await this.dialogs.prompt('Save workspace', 'Name this layout', 'My workspace', { okLabel: 'Save' });
+      if (name === null) return;
+      const r = W.saveAs(name, this);
+      if (r.error) { this.dialogs.toast(r.error, 'error'); return; }
+      this.dialogs.toast(r.replaced ? 'Workspace replaced' : 'Workspace saved');
     }
 
     _helpMenu() {

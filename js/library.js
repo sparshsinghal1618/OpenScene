@@ -184,6 +184,10 @@
 
     refresh() {
       this.scroll.innerHTML = '';
+      /* A custom transition can be re-saved with different parameters, and the
+         thumbnail is memoised per type. Dropping the memo here means an edited
+         transition never shows its previous preview. */
+      this._thumbs.clear();
       const items = this.items();
       this.countLabel.textContent = items.length + (items.length === 1 ? ' transition' : ' transitions');
       if (!items.length) { emptyNote(this.scroll, 'No transitions match your search.'); return; }
