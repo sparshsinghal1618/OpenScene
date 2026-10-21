@@ -421,15 +421,14 @@
     return 'u' + counter.toString(36) + Math.floor(Math.random() * 46656).toString(36);
   }
 
-  /* Push one entry into OS.transitions. */
+  /* Push one entry into OS.transitions.
+     Compile first, register second. Registering before compiling would leave a
+     broken entry visible in the transitions panel whenever a script fails to
+     validate - the user would see their transition in the list and get nothing
+     when they applied it. */
   function publish(entry) {
     const T = OS.transitions;
-    if (!T) return;
-    const key = KEY(entry.id);
-    /* Replace an existing tuple with the same key so re-registering is safe. */
-    const at = T.TYPES.findIndex((t) => t[0] === key);
-    const tuple = [key, entry.name, entry.group || 'Custom', entry.description || ''];
-    if (at >= 0) T.TYPES[at] = tuple; else T.TYPES.push(tuple);
+    if (!T) return 'Transitions are not available.';
 
     let renderer = null;
     if (entry.kind === 'spec') {
@@ -439,6 +438,12 @@
       if (r.error) return r.error;
       renderer = r.fn;
     }
+
+    const key = KEY(entry.id);
+    /* Replace an existing tuple with the same key so re-registering is safe. */
+    const at = T.TYPES.findIndex((t) => t[0] === key);
+    const tuple = [key, entry.name, entry.group || 'Custom', entry.description || ''];
+    if (at >= 0) T.TYPES[at] = tuple; else T.TYPES.push(tuple);
     T.FAMILY[key] = renderer;
     return null;
   }

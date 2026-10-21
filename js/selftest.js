@@ -882,7 +882,8 @@
           CT.remove(sr.entry.id);
         }
 
-        /* A throwing script must degrade to a dissolve, not kill the frame. */
+        /* A script that throws while running must degrade to a dissolve, not
+           kill the frame. The script compiles, so the transition is valid. */
         const bad = CT.add({ name: 'Thrower', kind: 'script', script: 'ctx.drawImage(A, 0, 0); throw new Error("boom");' });
         let survived = true;
         if (!bad.error) {
@@ -892,6 +893,16 @@
           CT.remove(bad.entry.id);
         }
         log('custom transitions: a throwing script falls back instead of aborting the frame', survived);
+
+        /* A script that does not compile must leave the registry untouched.
+           Registering first would put a dead entry in the transitions panel:
+           visible in the list, and doing nothing when applied. */
+        const countPreFail = T.TYPES.length;
+        const broken = CT.add({ name: 'Will not compile', kind: 'script', script: 'ctx.drawImage(A, 0, 0' });
+        log('custom transitions: a script that will not compile is refused', !!broken.error, broken.error || '');
+        log('custom transitions: a refused script leaves no entry in the panel',
+          T.TYPES.length === countPreFail && !T.TYPES.some((t) => /Will not compile/.test(t[1])),
+          `${countPreFail} -> ${T.TYPES.length}`);
 
         CT.remove(r.entry.id);
         log('custom transitions: removing one restores the original count',
@@ -922,21 +933,25 @@
         const read = W.readLayout(app);
         log('workspaces: hidden panels are recorded when the layout is read',
           read.dockLeft === false && read.propsPanel === false, JSON.stringify(read).slice(0, 90));
-        W.apply({ dockLeft: true, propsPanel: true, binW: 268, propsW: 322, tlH: 300 }, app);
 
-        /* Round trip: save the current layout, read it back, and check the
-           numbers survived. This is what makes a saved workspace trustworthy. */
+        /* Round trip: save the layout that is currently on screen, then compare
+           the stored geometry against what readLayout reported. Read it once,
+           immediately before saving, so the two cannot drift apart. */
+        const beforeSave = W.readLayout(app);
         const saved = W.saveAs('selftest-preset', app);
         log('workspaces: a user preset can be saved', !saved.error && !!saved.preset, saved.error || '');
         if (!saved.error) {
           const found = W.byId(saved.preset.id);
           log('workspaces: the saved preset keeps its geometry',
-            !!found && found.layout.binW === read.binW && found.layout.tlH === read.tlH,
+            !!found && found.layout.binW === beforeSave.binW &&
+            found.layout.tlH === beforeSave.tlH &&
+            found.layout.dockLeft === beforeSave.dockLeft,
             found ? JSON.stringify(found.layout).slice(0, 90) : 'missing');
           log('workspaces: a saved preset can be renamed', W.rename(saved.preset.id, 'renamed-preset'));
           log('workspaces: a saved preset can be deleted', W.remove(saved.preset.id));
           log('workspaces: a built-in preset cannot be deleted', W.remove('builtin:assembly') === false);
         }
+        W.apply({ dockLeft: true, propsPanel: true, binW: 268, propsW: 322, tlH: 300 }, app);
 
         /* Out-of-range values must be clamped, or a corrupted store could push
            the layout into an unusable state. */
@@ -952,6 +967,62 @@
           Math.abs(afterReset.binW - W.DEFAULTS.binW) < 1.5 && afterReset.dockLeft === true,
           JSON.stringify(afterReset).slice(0, 90));
       } catch (e) { log('workspaces: built-in presets exist', false, e.stack || e.message); }
+
+      /* 20 - the boot path actually restores what was saved. Both features
+         persist to IndexedDB, so a missing restore call is invisible until the
+         user restarts and finds their work gone. */
+      try {
+        const CT = OS.customTrans;
+        const W = OS.workspaces;
+
+        const beforeCount = OS.transitions.TYPES.length;
+        const ct = CT.add({ name: 'restore-check', kind: 'spec', spec: { family: 'blinds', bands: 9 } });
+        await CT.save();
+
+        W.apply({ binW: 411, propsW: 299, tlH: 233, dockLeft: true, propsPanel: true }, app);
+        const ws = W.saveAs('restore-workspace', app);
+        await W.persist;
+        // persist() is debounced, so give the timer a moment to fire.
+        await new Promise((r) => setTimeout(r, 400));
+
+        const ctStore = await OS.media.idbGet('kv', CT.STORE_KEY);
+        const wsStore = await OS.media.idbGet('kv', W.STORE_KEY);
+        log('persistence: a custom transition reaches the store',
+          Array.isArray(ctStore) && ctStore.some((e) => e.name === 'restore-check'),
+          Array.isArray(ctStore) ? ctStore.map((e) => e.name).join(',') : String(ctStore));
+        log('persistence: a workspace reaches the store',
+          Array.isArray(wsStore) && wsStore.some((w) => w.name === 'restore-workspace'),
+          Array.isArray(wsStore) ? wsStore.map((w) => w.name).join(',') : String(wsStore));
+
+        /* Simulate a restart: wipe the in-memory registries the way a fresh page
+           would, then run the boot restore and check both come back. */
+        CT.list().slice().forEach((e) => CT.remove(e.id));
+        W.all().filter((w) => !w.builtin).forEach((w) => W.remove(w.id));
+        const wiped = OS.transitions.TYPES.length;
+
+        await app._restoreSavedState();
+
+        const restoredCT = CT.list().some((e) => e.name === 'restore-check');
+        const restoredWS = W.all().some((w) => w.name === 'restore-workspace');
+        log('persistence: the boot restore brings the custom transition back', restoredCT,
+          CT.list().map((e) => e.name).join(',') || 'none');
+        log('persistence: the boot restore brings the workspace back', restoredWS,
+          W.all().filter((w) => !w.builtin).map((w) => w.name).join(',') || 'none');
+        log('persistence: a restored transition is usable, not just listed',
+          OS.transitions.TYPES.length > wiped && !!OS.transitions.FAMILY[CT.KEY(ct.entry.id)],
+          `${wiped} -> ${OS.transitions.TYPES.length}`);
+        log('persistence: a restored workspace still has its geometry',
+          (W.all().find((w) => w.name === 'restore-workspace') || {}).layout !== undefined &&
+          W.all().find((w) => w.name === 'restore-workspace').layout.binW === 411);
+
+        /* Leave the store as it was found. */
+        CT.list().filter((e) => e.name === 'restore-check').forEach((e) => CT.remove(e.id));
+        W.all().filter((w) => w.name === 'restore-workspace').forEach((w) => W.remove(w.id));
+        await CT.save();
+        await W.persist;
+        log('persistence: the restore test cleans up after itself',
+          OS.transitions.TYPES.length === beforeCount, `${beforeCount} -> ${OS.transitions.TYPES.length}`);
+      } catch (e) { log('persistence: a custom transition reaches the store', false, e.stack || e.message); }
     } catch (e) {
       log('self-test: unexpected failure', false, e.stack || e.message);
     }

@@ -109,12 +109,46 @@
       // ---- async niceties ----
       this.persist.getRecents().then((r) => { this._recentsCache = r || []; }).catch(() => { this._recentsCache = []; });
       this.events.on('recents-changed', (list) => { this._recentsCache = list || []; });
+
+      /* Restore what the user saved last time. Both are best-effort: a broken
+         store must never stop the editor from starting, so each is isolated and
+         the layout is only applied if a preset actually came back. Runs after
+         the panels and the dock exist, because applying a workspace drives them. */
+      this._restoreSavedState();
+
       setTimeout(() => this.persist.recoveryPrompt(), 600);
       const hash = (location.hash || '') + (location.search || '');
       if (/selftest/i.test(hash)) setTimeout(() => this.runSelfTest(), 900);
     }
 
     /* ================= layout helpers ================= */
+
+    /* Bring back the custom transitions and the active workspace from the last
+       session. Deliberately fire-and-forget: the editor is already usable, and a
+       storage failure should degrade to "no custom transitions" rather than
+       break startup. */
+    async _restoreSavedState() {
+      const CT = OS.customTrans;
+      if (CT) {
+        try {
+          const n = await CT.load();
+          if (n > 0) {
+            CT.refreshPanels();
+            this.setStatus(n + (n === 1 ? ' custom transition' : ' custom transitions') + ' restored');
+          }
+        } catch (e) { console.warn('[OpenScene] could not restore custom transitions', e); }
+      }
+
+      const W = OS.workspaces;
+      if (W) {
+        try {
+          await W.loadState();
+          /* Only re-apply if the user actually had a workspace selected, so a
+             fresh profile keeps the default layout rather than jumping. */
+          if (W.activeId && W.byId(W.activeId)) W.apply(W.byId(W.activeId).layout, this);
+        } catch (e) { console.warn('[OpenScene] could not restore the workspace', e); }
+      }
+    }
 
     _wireSplitters() {
       const bind = (handleId, panelId, side, cssVar) => {
