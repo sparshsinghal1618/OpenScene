@@ -28,6 +28,7 @@ $sdk    = Join-Path $native 'webview2'
 $out    = Join-Path $root 'Dist\OpenScene'
 
 function Step($m) { Write-Host "  $m" }
+function Warn($m) { Write-Host "  WARNING    $m" -ForegroundColor Yellow }
 function Fail($m) { Write-Host ''; Write-Host "BUILD FAILED: $m" -ForegroundColor Red; exit 1 }
 
 Write-Host 'OpenScene - native Windows build' -ForegroundColor Cyan
@@ -54,6 +55,44 @@ foreach ($f in @($coreDll, $wfDll, $loader)) {
   }
 }
 Step 'webview2   SDK found (lib\net462 + win-x64 loader)'
+
+# ------------------------------------------------- WebView2 runtime bootstrapper
+# Bundled into the installer so a machine without the runtime is handled by setup
+# rather than by the user. Fetched on demand and cached in native\ so a clean clone
+# can build the single-file installer with no manual download step. Not fatal when
+# unavailable: the installer then ships without the fallback and still works
+# wherever WebView2 is already present, which is the normal case.
+$wv2Dir  = Join-Path $native 'webview2-bootstrapper'
+$wv2Exe  = Join-Path $wv2Dir 'MicrosoftEdgeWebview2Setup.exe'
+$wv2Url  = 'https://go.microsoft.com/fwlink/p/?LinkId=2124703'
+if (-not (Test-Path -LiteralPath $wv2Exe)) {
+  Step 'webview2   fetching the runtime bootstrapper'
+  try {
+    New-Item -ItemType Directory -Force -Path $wv2Dir | Out-Null
+    $prev = $ProgressPreference
+    $ProgressPreference = 'SilentlyContinue'
+    Invoke-WebRequest -Uri $wv2Url -OutFile $wv2Exe -UseBasicParsing -MaximumRedirection 5
+    $ProgressPreference = $prev
+  } catch {
+    $ProgressPreference = $prev
+    Warn "could not download the WebView2 bootstrapper: $($_.Exception.Message)"
+  }
+}
+if (Test-Path -LiteralPath $wv2Exe) {
+  # Trust matters here: this is a runtime installer embedded in ours, so refuse
+  # anything that is not signed by Microsoft rather than shipping it silently.
+  $sig = Get-AuthenticodeSignature -LiteralPath $wv2Exe
+  $subject = if ($sig.SignerCertificate) { $sig.SignerCertificate.Subject } else { '' }
+  if ($sig.Status -eq 'Valid' -and $subject -match 'Microsoft Corporation') {
+    Step "webview2   bootstrapper ready ($([math]::Round((Get-Item $wv2Exe).Length / 1MB, 2)) MB, Microsoft-signed)"
+  } else {
+    Warn "the WebView2 bootstrapper is not validly Microsoft-signed (status $($sig.Status)); it will not be bundled"
+    $wv2Exe = $null
+  }
+} else {
+  Warn 'no WebView2 bootstrapper available; the installer will rely on the runtime already being present'
+  $wv2Exe = $null
+}
 
 # ---------------------------------------------------------------- sources
 $sources = @(
@@ -134,36 +173,39 @@ foreach ($item in @('index.html', 'css', 'js', 'resources', 'icons', 'manifest.w
     Copy-Item -LiteralPath $src -Destination $out -Recurse -Force
   }
 }
-foreach ($doc in @('README.md', 'CHANGELOG.md')) {
+foreach ($doc in @('README.md', 'CHANGELOG.md', 'LICENSING.md', 'CLA.md', 'LICENSE-MIT')) {
   $src = Join-Path $root $doc
   if (Test-Path -LiteralPath $src) { Copy-Item -LiteralPath $src -Destination $out -Force }
 }
 
-# A tiny text file so the folder explains itself.
-$txt = @'
-OpenScene - native Windows app
-=============================
-
-Run OpenScene.exe to start the editor.
-
-  OpenScene.exe                 the editor
-  OpenScene.exe --devtools      start with the developer tools enabled (F12)
-  OpenScene.exe --fullscreen    start maximised
-  OpenScene.exe --help          list the command line options
-
-Requirements: Windows 10 or Windows 11. OpenScene uses the Microsoft Edge WebView2
-runtime, which is already part of Windows. If it is ever missing, install it free from
-https://go.microsoft.com/fwlink/p/?LinkId=2124703
-
-Keep every file in this folder together - OpenScene.exe looks for index.html, js\ and
-css\ right next to itself.
-
-Projects are plain JSON files ( *.oscene ) and are fully portable. OpenShot .osp projects import directly.
-
-OpenScene is free and open source software, released under the GNU Affero
-General Public License v3.0. See LICENSE for details. A commercial licence is
-available for organisations that cannot accept the AGPL - see LICENSING.md.
-'@
+# A tiny text file so the folder explains itself. Written as an array of lines and
+# joined with CRLF so the encoding and line endings are identical on every run.
+$txtLines = @(
+  'OpenScene - native Windows app'
+  '============================='
+  ''
+  'Run OpenScene.exe to start the editor.'
+  ''
+  '  OpenScene.exe                 the editor'
+  '  OpenScene.exe --devtools      start with the developer tools enabled (F12)'
+  '  OpenScene.exe --fullscreen    start maximised'
+  '  OpenScene.exe --help          list the command line options'
+  ''
+  'Requirements: Windows 10 or Windows 11. OpenScene uses the Microsoft Edge WebView2'
+  'runtime, which is already part of Windows 10 and Windows 11. If it is ever missing,'
+  'the installer adds it automatically, or you can install it free from'
+  'https://go.microsoft.com/fwlink/p/?LinkId=2124703'
+  ''
+  'Keep every file in this folder together - OpenScene.exe looks for index.html, js\ and'
+  'css\ right next to itself.'
+  ''
+  'Projects are plain JSON files ( *.oscene ) and are fully portable. OpenShot .osp projects import directly.'
+  ''
+  'OpenScene is free and open source software, released under the GNU Affero'
+  'General Public License v3.0. See LICENSE for details. A commercial licence is'
+  'available for organisations that cannot accept the AGPL - see LICENSING.md.'
+)
+$txt = ($txtLines -join "`r`n") + "`r`n"
 Set-Content -LiteralPath (Join-Path $out 'START-HERE.txt') -Value $txt -Encoding UTF8
 
 # ---------------------------------------------------------------- optional shortcut
