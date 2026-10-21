@@ -160,8 +160,9 @@ css\ right next to itself.
 
 Projects are plain JSON files ( *.oscene ) and are fully portable. OpenShot .osp projects import directly.
 
-OpenScene is free and open source software, released under the MIT licence.
-See LICENSE for details.
+OpenScene is free and open source software, released under the GNU Affero
+General Public License v3.0. See LICENSE for details. A commercial licence is
+available for organisations that cannot accept the AGPL - see LICENSING.md.
 '@
 Set-Content -LiteralPath (Join-Path $out 'START-HERE.txt') -Value $txt -Encoding UTF8
 

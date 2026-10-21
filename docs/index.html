@@ -22,7 +22,7 @@
 <link rel="icon" href="icons/favicon-16.png" sizes="16x16" />
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png" />
 <link rel="manifest" href="manifest.webmanifest" />
-<link rel="stylesheet" href="site.css?v=5" />
+<link rel="stylesheet" href="site.css?v=6" />
 </head>
 <body>
 
@@ -60,7 +60,7 @@
   <div class="hero-glow" aria-hidden="true"></div>
   <div class="wrap hero-in">
     <div class="hero-copy">
-      <p class="eyebrow">Free &amp; open source · MIT licence · Windows 10/11</p>
+      <p class="eyebrow">Free &amp; open source · AGPL-3.0 · Windows 10/11</p>
       <h1>Edit video like a studio.<br /><span class="grad">On your own machine.</span></h1>
       <p class="lede">
         OpenScene is a complete non-linear editor — a multi-track timeline, a real
@@ -181,7 +181,7 @@
           <tr><th>Capability</th><th class="us">OpenScene</th><th>OpenShot</th><th>Premiere / Resolve</th></tr>
         </thead>
         <tbody>
-          <tr><td>Price</td><td class="us">Free (MIT)</td><td>Free</td><td>Subscription / free tier</td></tr>
+          <tr><td>Price</td><td class="us">Free (AGPL)</td><td>Free</td><td>Subscription / free tier</td></tr>
           <tr><td>Open source</td><td class="us yes">Yes</td><td class="yes">Yes</td><td class="no">No</td></tr>
           <tr><td>Offline, no accounts</td><td class="us yes">Yes</td><td class="yes">Yes</td><td class="no dont">Account for cloud</td></tr>
           <tr><td>Runtime to install</td><td class="us yes">None</td><td class="no">Python + Qt</td><td class="no">Large suite</td></tr>
@@ -260,7 +260,7 @@
       <ul class="dl-alt">
         <li><b>Portable zip</b> — unzip anywhere and run <code>OpenScene.exe</code>. Nothing is installed.</li>
         <li><b>Build from source</b> — one PowerShell script and the C# compiler that ships with Windows. No Node, no npm, no downloads.</li>
-        <li><b>Source code</b> — the whole editor is public on GitHub under the MIT licence.</li>
+        <li><b>Source code</b> — the whole editor is public on GitHub under the AGPL-3.0 licence.</li>
       </ul>
     </div>
 
@@ -281,7 +281,7 @@ Build-Installer.bat</code></pre>
     <div class="faq">
       <details>
         <summary>Is it really free?</summary>
-        <p>Yes. OpenScene is released under the MIT licence. Use it commercially, modify it, ship it — no cost and no permission needed.</p>
+        <p>Yes. OpenScene is released under the AGPL-3.0 and costs nothing. Use it for paid work, modify it, and share it freely. The one condition is that if you distribute a modified version, or run one as a network service, you publish your changes under the same licence. Companies that cannot accept that can buy a <a class="inline-link" href="#licensing">commercial licence</a>.</p>
       </details>
       <details>
         <summary>Does anything leave my computer?</summary>
@@ -311,6 +311,41 @@ Build-Installer.bat</code></pre>
   </div>
 </section>
 
+<!-- ------------------------------------------------ licensing -->
+<section class="section" id="licensing">
+  <div class="wrap narrow">
+    <p class="eyebrow center">Licensing</p>
+    <h2 class="center">Free under the AGPL</h2>
+    <p class="sub center">
+      OpenScene is genuine open source, not a free tier of a paid product. There is no
+      cut-down edition and no feature held back. The licence is the only thing to know about.
+    </p>
+
+    <div class="grid">
+      <article class="card">
+        <div class="ico">◆</div>
+        <h3>Use it for anything</h3>
+        <p>Edit paid client work, study the source, fork it, ship your own build. All of that is free and needs no permission and no payment.</p>
+      </article>
+      <article class="card">
+        <div class="ico">◐</div>
+        <h3>The one condition</h3>
+        <p>The AGPL asks that if you distribute a modified OpenScene, or run one so people use it over a network, you publish your changes under the same licence.</p>
+      </article>
+      <article class="card">
+        <div class="ico">▣</div>
+        <h3>If that does not suit you</h3>
+        <p>Organisations that must keep their changes closed can buy a commercial licence instead. <a class="inline-link" href="https://github.com/sparshsinghal1618/OpenScene/blob/master/LICENSING.md">Read the terms</a>.</p>
+      </article>
+    </div>
+
+    <p class="micro center" style="margin-top:26px">
+      Released up to v1.1.0 under the MIT licence, which those releases keep. Licensed under the
+      GNU Affero General Public License v3.0 from this release onward.
+    </p>
+  </div>
+</section>
+
 <!-- ------------------------------------------------ cta -->
 <section class="cta">
   <div class="wrap narrow center">
@@ -331,7 +366,7 @@ Build-Installer.bat</code></pre>
     </div>
     <div class="foot-links">
       <a href="https://github.com/sparshsinghal1618/OpenScene">GitHub</a>
-      <a href="https://github.com/sparshsinghal1618/OpenScene/blob/master/LICENSE">MIT licence</a>
+      <a href="https://github.com/sparshsinghal1618/OpenScene/blob/master/LICENSE">AGPL-3.0</a>
       <a href="#download">Download</a>
       <a href="#faq">FAQ</a>
     </div>

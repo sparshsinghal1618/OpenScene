@@ -659,7 +659,7 @@
           kv('WebCodecs', ('VideoEncoder' in window) ? 'available' : 'not available'),
           kv('MediaRecorder', (typeof MediaRecorder !== 'undefined') ? 'available' : 'not available'),
           kv('OfflineAudioContext', (window.OfflineAudioContext ? 'available' : 'not available')),
-          kv('License', 'MIT'),
+          kv('License', 'AGPL-3.0'),
         ]),
         el('div.about-note', { text: 'Built with zero third-party dependencies: the timeline, compositor, mixer, MP4 muxer and UI are all hand-written and run on the browser engine.' }),
       );

@@ -743,7 +743,8 @@
       const content = el('div.licenses');
       content.innerHTML = `
         <h4>OpenScene</h4>
-        <p>Released under the MIT License. Copyright © ${new Date().getFullYear()} OpenScene contributors.</p>
+        <p>Released under the GNU Affero General Public License v3.0. Copyright © ${new Date().getFullYear()} Sparsh Singhal.
+        A commercial licence is available for organisations that cannot accept the AGPL's terms.</p>
         <h4>Third-party components</h4>
         <p>None. OpenScene is written from scratch with no runtime dependencies.
         The timeline, compositor, transitions, titling, audio mixer, the ISO-BMFF (MP4)

@@ -333,7 +333,20 @@ in-process, and stored locally so projects reopen instantly. Nothing is uploaded
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE).
+**GNU Affero General Public License v3.0** - see [LICENSE](LICENSE).
+
+OpenScene was MIT-licensed up to and including `v1.1.0`. Anyone who received it
+under those terms keeps them; the change is not retroactive. See
+[LICENSE-MIT](LICENSE-MIT) for the historical text.
+
+The AGPL is strong copyleft. It matters most for its network clause: if you run
+a *modified* OpenScene so users interact with it over a network, you must offer
+those users the source of your version.
+
+If your organisation cannot accept those terms, a **commercial licence** is
+available - see [LICENSING.md](LICENSING.md). Contributions are accepted under
+the terms in [CLA.md](CLA.md), which is what allows the project to keep offering
+that commercial option.
 
 OpenScene contains **no third-party runtime code**. The Windows host is
 built against the WebView2 SDK (vendored under `native/webview2/` for offline builds);
