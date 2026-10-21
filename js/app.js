@@ -19,7 +19,7 @@
       /* Kept in step with the git tag and the GitHub release. Shown in the
          About dialog and written into every saved project file, so it must not
          disagree with what was actually shipped. */
-      this.VERSION = '1.1.0';
+      this.VERSION = '1.2.0';
       this.events = new U.Emitter();
       this.previewScale = 1;
       this.clipboard = null;
