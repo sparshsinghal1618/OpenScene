@@ -293,68 +293,7 @@ p  { margin: 0 0 1em; color: var(--ink-2); }
 .cta { padding: 84px 0; background: #0d1620; border-top: 1px solid var(--line-soft); }
 .cta h2 { margin-bottom: .3em; }
 
-/* ------------------------------------------------ support
-   A support banner under the hero, a compact card in Download, a dedicated
-   section, and a footer link. One platform (Buy Me a Coffee) so the message
-   stays simple. The accent colour is the BMC yellow.
-   -------------------------------------------------------------------- */
-:root { --coffee: #ffdd00; }
-
-.btn.coffee {
-  background: var(--coffee); color: #241c00; font-weight: 800;
-  box-shadow: 0 10px 26px rgba(255,221,0,.18);
-}
-.btn.coffee:hover { filter: brightness(1.05); }
-
-/* banner under the stats strip */
-.support-band {
-  background: #12100a;
-  border-top: 1px solid #2a2712;
-  border-bottom: 1px solid #2a2712;
-}
-.support-band-in {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 22px; padding: 22px 0; flex-wrap: wrap;
-}
-.support-band-copy h3 { margin: 0 0 4px; font-size: 1.06rem; }
-.support-band-title { margin: 0 0 4px; font-size: 1.06rem; font-weight: 700; color: var(--ink); }
-.support-band-copy p { margin: 0; font-size: .93rem; color: var(--ink-2); max-width: 62ch; }
-
-/* compact card inside the Download section */
-.support-card {
-  margin-top: 18px; padding: 18px 20px;
-  border: 1px solid var(--line); border-radius: var(--radius);
-  background: var(--panel);
-  display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap;
-}
-.support-card-txt { display: flex; flex-direction: column; gap: 3px; }
-.support-card-txt b { font-size: .98rem; }
-.support-card-txt span { font-size: .88rem; color: var(--ink-2); }
-
-/* dedicated section */
-.support-grid {
-  margin-top: 34px; display: grid; grid-template-columns: 1.15fr .85fr; gap: 18px;
-}
-.support-why, .support-cta {
-  border: 1px solid var(--line); border-radius: var(--radius);
-  background: var(--panel); padding: 24px;
-}
-.support-why h3, .support-cta h3 { font-size: 1.06rem; }
-.support-why ul { margin: 0 0 16px; padding-left: 18px; }
-.support-why li { color: var(--ink-2); font-size: .93rem; margin-bottom: 8px; }
-.support-cta {
-  text-align: center; display: flex; flex-direction: column; align-items: center;
-  justify-content: center; gap: 10px; background: #16150d; border-color: #2f2c16;
-}
-.support-cta p { margin: 0; font-size: .9rem; }
-.coffee-badge {
-  width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center;
-  background: rgba(255,221,0,.14); border: 1px solid rgba(255,221,0,.34); color: var(--coffee);
-}
-.support-alt { margin-top: 26px; }
-
 /* footer */
-.foot-links a.foot-support { color: var(--coffee); }
 .foot { border-top: 1px solid var(--line-soft); background: var(--bg-2); padding: 40px 0 26px; }
 .foot-in { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
 .foot-brand { display: flex; align-items: center; gap: 10px; }
@@ -459,13 +398,6 @@ section[id], #main { scroll-margin-top: calc(var(--top) + 12px); }
   .faq summary { padding: 16px 0; min-height: 44px; }
   .dl { padding: 20px; }
   .cta { padding: 60px 0; }
-
-  /* support: stack, and give the coffee button room to breathe */
-  .support-band-in { flex-direction: column; align-items: stretch; gap: 14px; padding: 20px 0; }
-  .support-band-in .btn { width: 100%; }
-  .support-card { flex-direction: column; align-items: stretch; gap: 12px; }
-  .support-grid { grid-template-columns: 1fr; gap: 14px; }
-  .support-why, .support-cta { padding: 20px; }
 
   .badge-float { font-size: .7rem; padding: 6px 10px; }
   .badge-float.b1 { top: -10px; left: 6px; }
