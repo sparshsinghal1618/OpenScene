@@ -2,6 +2,12 @@
 
 **A free, open-source, professional non-linear video editor for Windows.**
 
+[![Licence: AGPL-3.0](https://img.shields.io/badge/licence-AGPL--3.0-blue)](LICENSE)
+[![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%2F11-0078d4)](#get-it)
+[![Runtime dependencies: 0](https://img.shields.io/badge/runtime%20dependencies-0-brightgreen)](#architecture)
+[![Self-test: 81 passing](https://img.shields.io/badge/self--test-81%20passing-brightgreen)](#self-test)
+[![Download](https://img.shields.io/badge/download-installer-2ea44f)](https://github.com/sparshsinghal1618/OpenScene/releases/latest/download/OpenScene-Setup.exe)
+
 OpenScene is a complete editor: a multi-track timeline, a real compositor, **164
 transitions**, **136 effects**, keyframing, titling, a mastering audio bus and a
 frame-exact H.264/AAC exporter. Everything runs on your own machine — no cloud, no
@@ -18,8 +24,23 @@ ships with the operating system.
   <img src="icons/icon-192.png" width="128" alt="OpenScene logo">
 </p>
 
-The project website lives at **https://sparshsinghal1618.github.io/OpenScene/** (source in
-[`docs/`](docs/)).
+**[Download the installer](https://github.com/sparshsinghal1618/OpenScene/releases/latest/download/OpenScene-Setup.exe)**
+· **[Project website](https://sparshsinghal1618.github.io/OpenScene/)** (source in [`docs/`](docs/))
+
+---
+
+## Screenshots
+
+Screenshots live in [`docs/shots/`](docs/shots/). Generate them from the running
+app with:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\CaptureScreenshots.ps1
+```
+
+The script drives a headless Chrome or Edge, so nothing needs installing beyond a
+browser and Python. It captures the default view; open the editor and grab the
+rest by hand if you want per-panel shots.
 
 ---
 
@@ -27,7 +48,11 @@ The project website lives at **https://sparshsinghal1618.github.io/OpenScene/** 
 
 ### Windows (the real desktop app)
 
-Double-click the build script, or run the two steps by hand:
+The fastest route is the single-file installer from the releases page:
+
+**[OpenScene-Setup.exe](https://github.com/sparshsinghal1618/OpenScene/releases/latest/download/OpenScene-Setup.exe)** - one file, about 0.6 MB.
+
+Or build it yourself. Double-click the build script, or run the two steps by hand:
 
 ```bat
 Build-Installer.bat
