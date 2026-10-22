@@ -58,6 +58,23 @@
       <button class="btn btn-tool" id="tbSave" title="Save project (Ctrl+S)">Save</button>
       <button class="btn btn-tool" id="tbExport" title="Export (Ctrl+E)">Export</button>
       <button class="btn btn-icon" id="tbSettings" title="Project settings">Settings</button>
+
+      <span class="toolbar-sep" role="separator"></span>
+
+      <!-- Edit tools. These mirror the timeline's own shortcuts (S, M) and add
+           the speed control, so the common edits do not require a right-click. -->
+      <div class="toolbar-group">
+        <button class="tbtn" id="tbCut" title="Cut at playhead - razor (S)" aria-label="Cut at playhead">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="5.6" cy="15.2" r="2.4" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="14.4" cy="15.2" r="2.4" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7.3 13.4 14.6 3.2M12.7 13.4 5.4 3.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+        <button class="tbtn" id="tbMarker" title="Add marker at playhead (M)" aria-label="Add marker at playhead">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 17V3.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M5.4 4.2h9.4l-2.2 3 2.2 3H5.4z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="tbtn tbtn-speed" id="tbSpeed" title="Clip speed - retime the selected clip" aria-label="Clip speed">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 16.6a6.6 6.6 0 1 1 5.7-3.3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M10 10.4l3.6-3.1" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          <span class="speed-badge" id="tbSpeedBadge">1x</span>
+        </button>
+      </div>
     </div>
   </header>
 

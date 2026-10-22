@@ -81,33 +81,29 @@
 
     /* --- media --- */
     pickFiles: function (opts) { return call('files:pick', opts || {}); },
+    /* Stream files from disk directly via the host's WebResource handler so
+       the browser handles range requests. Only the header is needed for
+       probing duration/resolution, and nothing is base64-copied. */
     readFile: function (path) {
-      return call('file:open', { path: path }).then(function (opened) {
-        if (!opened || opened.id == null) {
-          throw new Error((opened && opened.error) || ('cannot open ' + path));
-        }
-        var parts = [];
-        var total = 0;
-        function pump() {
-          return call('file:chunk', { id: opened.id, offset: total, length: CHUNK }).then(function (c) {
-            if (!c) return null;
-            if (c.b64 && c.b64.length) {
-              var bytes = b64ToBytes(c.b64);
-              parts.push(bytes);
-              total += bytes.length;
-            }
-            if (c.eof) return null;
-            return pump();
-          });
-        }
-        function done() {
-          return call('file:close', { id: opened.id }).then(
-            function () { return concat(parts, total); },
-            function () { return concat(parts, total); }
-          );
-        }
-        return pump().then(done);
-      });
+      try {
+        var b64path = btoa(unescape(encodeURIComponent(path))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        var url = 'https://openscene.app/localfile/' + b64path + '/' + encodeURIComponent((path.split(/[\\/]/).pop()) || 'file');
+        return fetch(url).then(function (res) { return res.blob(); }).then(function (blob) {
+          var name = (path.split(/[\\/]/).pop()) || 'file';
+          return new File([blob], name, { type: blob.type || 'application/octet-stream' });
+        });
+      } catch (e) {
+        return Promise.reject(e);
+      }
+    },
+    streamUrl: function (path) {
+      try {
+        var b64path = btoa(unescape(encodeURIComponent(path))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        var name = (path.split(/[\\/]/).pop()) || 'file';
+        return 'https://openscene.app/localfile/' + b64path + '/' + encodeURIComponent(name);
+      } catch (e) {
+        return null;
+      }
     },
 
     /* --- exports --- */

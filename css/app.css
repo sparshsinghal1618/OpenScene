@@ -413,6 +413,34 @@ body.row-resizing { cursor: row-resize; }
 .tbtn:hover { background: var(--panel-3); color: var(--text); }
 .tbtn.on { background: var(--accent-soft); border-color: var(--accent); color: #fff; }
 .tbtn svg { width: 15px; height: 15px; fill: currentColor; pointer-events: none; }
+
+/* Icons in the main toolbar are stroked rather than filled, so they need an
+   explicit stroke colour and no fill. The transport bar's icons are filled
+   shapes and are left alone. */
+.toolbar .tbtn svg { fill: none; stroke: currentColor; }
+
+.toolbar-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--line-2);
+  margin: 0 4px;
+  flex: 0 0 auto;
+}
+.toolbar-group { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+
+/* The speed control carries a small live value, so it is wider than a plain
+   icon button and aligns the badge with the glyph. */
+.tbtn-speed { gap: 5px; padding: 0 8px; }
+.speed-badge {
+  font-size: var(--fs-s);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  opacity: 0.92;
+  min-width: 22px;
+  text-align: center;
+}
+.tbtn-speed.mixed { border-color: var(--warn, var(--accent)); }
+.tbtn-speed.mixed .speed-badge { opacity: 1; }
 .tbtn-play { min-width: 44px; background: var(--accent-2); border-color: var(--accent); color: #fff; }
 .tbtn-play:hover { background: var(--accent); }
 .tbtn-play.on { background: var(--accent); }
@@ -775,6 +803,59 @@ textarea { resize: vertical; font-family: inherit; }
 .modal-body { padding: 15px; overflow: auto; min-height: 0; }
 .modal-foot { display: flex; align-items: center; gap: 8px; padding: 11px 15px; border-top: 1px solid var(--line); background: var(--panel-2); }
 .modal-message { color: var(--text-2); line-height: 1.6; margin-bottom: 12px; }
+
+/* ---------- clip speed dialog ---------- */
+
+.sp-field { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.sp-field .text-input { width: 92px; }
+.sp-label { color: var(--text-2); font-size: var(--fs-s); min-width: 44px; }
+.sp-x { color: var(--text-3); font-size: var(--fs-s); }
+
+.sp-presets { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 14px; }
+.sp-preset {
+  font: inherit;
+  font-size: var(--fs-s);
+  font-variant-numeric: tabular-nums;
+  background: var(--panel-2);
+  color: var(--text-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-s);
+  padding: 3px 9px;
+  cursor: pointer;
+}
+.sp-preset:hover { background: var(--panel-3); color: var(--text); }
+.sp-preset.on { background: var(--accent-soft); border-color: var(--accent); color: #fff; }
+
+.sp-modes { display: flex; flex-direction: column; gap: 8px; }
+.sp-mode {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-s);
+  background: var(--panel-2);
+  cursor: pointer;
+}
+.sp-mode:hover { background: var(--panel-3); }
+.sp-mode input { margin-top: 2px; flex: 0 0 auto; }
+.sp-mode-body { min-width: 0; }
+.sp-mode-title { color: var(--text); font-size: var(--fs-s); }
+.sp-mode-detail {
+  color: var(--text-3);
+  font-size: var(--fs-s);
+  margin-top: 3px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+}
+.sp-summary {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  color: var(--text-2);
+  font-size: var(--fs-s);
+  font-variant-numeric: tabular-nums;
+}
 
 /* ===================== context menus ===================== */
 

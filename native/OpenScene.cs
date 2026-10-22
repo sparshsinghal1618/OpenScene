@@ -277,6 +277,12 @@ namespace OpenScene
             core.ProcessFailed += OnProcessFailed;
             core.PermissionRequested += OnPermissionRequested;
             core.DownloadStarting += OnDownloadStarting;
+            core.WebResourceRequested += OnWebResourceRequested;
+            try
+            {
+                core.AddWebResourceRequestedFilter("https://openscene.app/localfile/*", CoreWebView2WebResourceContext.All);
+            }
+            catch (Exception) { }
         }
 
         private string ReadBridgeScript()
@@ -394,6 +400,120 @@ namespace OpenScene
                download pipeline is a genuine user download, so leave it alone but keep
                it out of the way of the app window. */
             e.DownloadOperation.StateChanged += delegate { };
+        }
+
+        /* Serve picked media files directly from disk with range support so the
+           browser can stream them without base64-copying the entire file through
+           the bridge. The page requests https://openscene.app/localfile/<base64url>/...
+           where the first segment is the path encoded with URL-safe base64. */
+        private void OnWebResourceRequested(object sender, CoreWebView2WebResourceRequestedEventArgs e)
+        {
+            try
+            {
+                Uri uri = new Uri(e.Request.Uri);
+                if (string.IsNullOrEmpty(uri.Host) ||
+                    !uri.Host.Equals(VirtualHost, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+                string path = uri.AbsolutePath;
+                if (string.IsNullOrEmpty(path)) return;
+                // Strip leading slash
+                if (path.StartsWith("/")) path = path.Substring(1);
+                if (!path.StartsWith("localfile/", StringComparison.OrdinalIgnoreCase)) return;
+                path = path.Substring("localfile/".Length);
+                // Find end of encoded path segment
+                int slash = path.IndexOf('/');
+                string b64path = slash >= 0 ? path.Substring(0, slash) : path;
+                if (string.IsNullOrEmpty(b64path)) return;
+                string localPath;
+                try
+                {
+                    string padded = b64path.Replace('-', '+').Replace('_', '/');
+                    switch (padded.Length % 4)
+                    {
+                        case 2: padded += "=="; break;
+                        case 3: padded += "="; break;
+                    }
+                    byte[] pbytes = Convert.FromBase64String(padded);
+                    localPath = Encoding.UTF8.GetString(pbytes);
+                }
+                catch (Exception)
+                {
+                    return;
+                }
+                if (string.IsNullOrEmpty(localPath) || !File.Exists(localPath)) return;
+
+                FileInfo fi = new FileInfo(localPath);
+                long total = fi.Length;
+                string mime = MimeFor(fi.Extension);
+
+                // Parse Range header if present
+                string rangeHeader = null;
+                try { rangeHeader = e.Request.Headers.GetHeader("Range"); } catch (Exception) { }
+
+                if (!string.IsNullOrEmpty(rangeHeader) && rangeHeader.StartsWith("bytes=", StringComparison.OrdinalIgnoreCase))
+                {
+                    string range = rangeHeader.Substring("bytes=".Length);
+                    long start = 0;
+                    long end = total - 1;
+                    int dash = range.IndexOf('-');
+                    if (dash >= 0)
+                    {
+                        string s = range.Substring(0, dash);
+                        string en = range.Substring(dash + 1);
+                        if (!string.IsNullOrEmpty(s)) long.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out start);
+                        if (!string.IsNullOrEmpty(en)) long.TryParse(en, NumberStyles.Any, CultureInfo.InvariantCulture, out end);
+                    }
+                    if (start < 0) start = 0;
+                    if (end >= total) end = total - 1;
+                    if (start > end)
+                    {
+                        e.Response = _web.CoreWebView2.Environment.CreateWebResourceResponse(
+                            null, 416, "Range Not Satisfiable",
+                            "Content-Range: bytes */" + total.ToString(CultureInfo.InvariantCulture));
+                        return;
+                    }
+                    long len = end - start + 1;
+                    byte[] buf = new byte[len];
+                    using (FileStream fs = new FileStream(localPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                    {
+                        fs.Seek(start, SeekOrigin.Begin);
+                        int n = 0;
+                        while (n < len)
+                        {
+                            int k = fs.Read(buf, n, (int)Math.Min(len - n, int.MaxValue));
+                            if (k <= 0) break;
+                            n += k;
+                        }
+                        if (n != len)
+                        {
+                            Array.Resize(ref buf, n);
+                            len = n;
+                        }
+                    }
+                    string respHeaders = "Content-Type: " + mime + "\r\n" +
+                        "Content-Range: bytes " + start.ToString(CultureInfo.InvariantCulture) + "-" +
+                        end.ToString(CultureInfo.InvariantCulture) + "/" + total.ToString(CultureInfo.InvariantCulture) + "\r\n" +
+                        "Accept-Ranges: bytes\r\n";
+                    System.IO.MemoryStream ms = new System.IO.MemoryStream(buf);
+                    e.Response = _web.CoreWebView2.Environment.CreateWebResourceResponse(ms, 206, "Partial Content", respHeaders);
+                }
+                else
+                {
+                    // Serve whole file for cases that need it
+                    byte[] buf = File.ReadAllBytes(localPath);
+                    System.IO.MemoryStream ms = new System.IO.MemoryStream(buf);
+                    string respHeaders = "Content-Type: " + mime + "\r\n" +
+                        "Accept-Ranges: bytes\r\n" +
+                        "Content-Length: " + total.ToString(CultureInfo.InvariantCulture) + "\r\n";
+                    e.Response = _web.CoreWebView2.Environment.CreateWebResourceResponse(ms, 200, "OK", respHeaders);
+                }
+            }
+            catch (Exception)
+            {
+                // Let default handling occur
+            }
         }
 
         /* ------------------------------------------------------------------ */

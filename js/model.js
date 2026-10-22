@@ -88,6 +88,7 @@
       thumb: meta.thumb || null,      // data URL
       undecodable: !!meta.undecodable, // container understood, codec unsupported here
       fileKey: meta.fileKey || null,  // IndexedDB key for the raw File (persistence)
+      filePath: meta.filePath || null, // native host absolute path for direct streaming
       missing: false,
       origin: meta.origin || 'import',
     };

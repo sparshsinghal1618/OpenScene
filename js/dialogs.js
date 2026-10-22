@@ -64,8 +64,8 @@
       return new Promise((resolve) => {
         const content = el('div.modal-message', { text: message });
         const api = this.open(title, content, { small: true });
-        const cancel = this.button(cancelLabel, () => { api.close(); resolve(false); });
-        const ok = this.button(okLabel, () => { api.close(); resolve(true); }, danger ? 'danger' : 'primary');
+        const cancel = this.button(cancelLabel, () => { resolve(false); api.close(); });
+        const ok = this.button(okLabel, () => { resolve(true); api.close(); }, danger ? 'danger' : 'primary');
         api.foot.append(el('span.spacer'), cancel, ok);
         api.onClose = () => resolve(false);
         setTimeout(() => ok.focus(), 0);
@@ -77,12 +77,146 @@
         const input = el('input.text-input', { value });
         const content = el('div', {}, [el('div.modal-message', { text: message }), input]);
         const api = this.open(title, content, { small: true });
-        const cancel = this.button('Cancel', () => { api.close(); resolve(null); });
-        const ok = this.button(okLabel, () => { const v = input.value; api.close(); resolve(v); }, 'primary');
+        const cancel = this.button('Cancel', () => { resolve(null); api.close(); });
+        const ok = this.button(okLabel, () => { const v = input.value; resolve(v); api.close(); }, 'primary');
         api.foot.append(el('span.spacer'), cancel, ok);
         api.onClose = () => resolve(null);
-        on(input, 'keydown', (e) => { if (e.key === 'Enter') { const v = input.value; api.close(); resolve(v); } });
+        on(input, 'keydown', (e) => { if (e.key === 'Enter') { const v = input.value; resolve(v); api.close(); } });
         setTimeout(() => { input.focus(); input.select(); }, 0);
+      });
+    }
+
+    /* Change one or more clips' speed.
+
+       Speed changes the relationship between timeline time and source time, so
+       it has to answer a second question: does the clip get shorter, or does it
+       keep its length and use less of the source? Both are legitimate and they
+       look completely different, so this asks rather than guessing.
+
+       `clips` is a list of {clip, length} where length is the clip's current
+       timeline length. Resolves to null if cancelled, otherwise
+       {speed, mode} where mode is 'retime' (length follows speed) or
+       'hold' (length is kept, the source range shrinks). */
+    changeSpeed(clips, { fps = 25 } = {}) {
+      if (!clips || !clips.length) return Promise.resolve(null);
+      return new Promise((resolve) => {
+        const multi = clips.length > 1;
+        const first = clips[0];
+
+        /* The project's fps is a timebase object ({num, den, rate, label}),
+           not a plain number, so dividing frames by it yields NaN. Prefer the
+           canonical helper, which keeps non-integer rates like 23.976 exact. */
+        const tb = OS.timebase;
+        const secsOf = (typeof fps === 'number' || !fps || !fps.num)
+          ? (frames) => frames / ((typeof fps === 'number' ? fps : 25) || 25)
+          : (frames) => tb.framesToSeconds(frames, fps);
+
+        const seconds = (frames) => {
+          const s = secsOf(frames);
+          return s.toFixed(s < 10 ? 2 : 1) + 's';
+        };
+
+        const speedInput = el('input.text-input', { value: String(first.clip.speed || 1) });
+        speedInput.type = 'number';
+        speedInput.min = '0.0625';
+        speedInput.max = '16';
+        speedInput.step = '0.0625';
+
+        /* Presets cover the common cases so the field is not the only way in. */
+        const presets = [0.25, 0.5, 1, 1.5, 2, 4, 8];
+        const presetRow = el('div.sp-presets');
+        for (const p of presets) {
+          const b = el('button.sp-preset', { text: p + 'x', type: 'button' });
+          if (Math.abs((first.clip.speed || 1) - p) < 1e-6) b.classList.add('on');
+          on(b, 'click', () => {
+            speedInput.value = String(p);
+            presetRow.querySelectorAll('.sp-preset').forEach((x) => x.classList.remove('on'));
+            b.classList.add('on');
+            update();
+          });
+          presetRow.appendChild(b);
+        }
+
+        /* Two radio rows. The numbers are computed live so the choice is made
+           with the real result in front of you, not a description of it. */
+        let mode = 'retime';
+        const mkMode = (value, title) => {
+          const row = el('label.sp-mode');
+          const radio = el('input', { type: 'radio', name: 'spm' });
+          radio.value = value;
+          radio.checked = value === mode;
+          on(radio, 'change', () => { mode = value; update(); });
+          const body = el('div.sp-mode-body');
+          body.appendChild(el('div.sp-mode-title', { text: title }));
+          const detail = el('div.sp-mode-detail');
+          body.appendChild(detail);
+          row.append(radio, body);
+          row._detail = detail;
+          return row;
+        };
+        const rowRetime = mkMode('retime', multi ? 'Keep the same source for each clip' : 'Keep the whole clip, change how fast it plays');
+        const rowHold = mkMode('hold', multi ? 'Keep the current lengths' : 'Keep the current length on the timeline');
+
+        const summary = el('div.sp-summary');
+
+        const readSpeed = () => {
+          const v = parseFloat(speedInput.value);
+          return Number.isFinite(v) && v > 0 ? v : null;
+        };
+
+        const update = () => {
+          const v = readSpeed();
+          const srcLen = first.length * (first.clip.speed || 1); // source frames used
+          if (v != null) {
+            const newLen = Math.max(1, Math.round(srcLen / v));
+            rowRetime._detail.textContent = seconds(first.length) + '  ->  ' + seconds(newLen) +
+              '  (all ' + seconds(first.length * (first.clip.speed || 1)) + ' of source, ' +
+              (v > 1 ? 'faster' : v < 1 ? 'slower' : 'unchanged') + ')';
+            rowHold._detail.textContent = seconds(first.length) + '  stays, playing ' +
+              seconds(Math.min(first.length * (first.clip.speed || 1), first.length * v)) + ' of source';
+          } else {
+            rowRetime._detail.textContent = '';
+            rowHold._detail.textContent = '';
+          }
+          if (v == null) { summary.textContent = 'Enter a speed above zero.'; return; }
+          if (v === 1) summary.textContent = 'No change.';
+          else if (multi) summary.textContent = clips.length + ' clips at ' + v + 'x' + (v > 1 ? ' (faster)' : ' (slower)');
+          else summary.textContent = v + 'x' + (v > 1 ? ' - faster' : ' - slower');
+        };
+
+        on(speedInput, 'input', () => {
+          presetRow.querySelectorAll('.sp-preset').forEach((x) => x.classList.remove('on'));
+          update();
+        });
+        update();
+
+        const content = el('div.sp', {}, [
+          el('div.modal-message', { text: multi
+            ? 'Set the speed for ' + clips.length + ' selected clips.'
+            : 'Set the speed for this clip.' }),
+          el('div.sp-field', {}, [el('span.sp-label', { text: 'Speed' }), speedInput, el('span.sp-x', { text: 'x' })]),
+          presetRow,
+          el('div.sp-modes', {}, [rowRetime, rowHold]),
+          summary,
+        ]);
+
+        const api = this.open('Clip speed', content, { small: true });
+        const cancel = this.button('Cancel', () => { resolve(null); api.close(); });
+        const ok = this.button('Apply', () => {
+          const v = readSpeed();
+          if (v == null) { speedInput.focus(); return; }
+          /* Resolve before closing: close() runs onClose synchronously, and a
+             later resolve would be dropped because the promise already
+             settled as null. */
+          resolve({ speed: v, mode });
+          api.close();
+        }, 'primary');
+        api.foot.append(el('span.spacer'), cancel, ok);
+        api.onClose = () => resolve(null);
+        on(speedInput, 'keydown', (e) => {
+          if (e.key === 'Enter') { e.preventDefault(); ok.click(); }
+        });
+        setTimeout(() => { speedInput.focus(); speedInput.select(); }, 0);
       });
     }
 

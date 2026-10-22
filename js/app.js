@@ -255,10 +255,37 @@
       wire('tbExport', () => this.dialogs.exportDialog());
       wire('tbSettings', () => this.dialogs.projectSettings());
       wire('tbShortcuts', () => this.dialogs.shortcuts());
+      wire('tbCut', () => this.splitAtPlayhead());
+      wire('tbMarker', () => this.addMarkerAtPlayhead());
+      wire('tbSpeed', () => this.changeClipSpeed());
+      this._syncToolbar();
+    }
+
+    /* Keep the toolbar's state showing what is actually selected, so the speed
+       badge never claims 2x while a 1x clip is selected. */
+    _syncToolbar() {
+      const badge = document.getElementById('tbSpeedBadge');
+      const btn = document.getElementById('tbSpeed');
+      if (!badge || !btn) return;
+
+      const sel = this._sel().filter((c) => !c.generator);
+      if (!sel.length) {
+        badge.textContent = '1x';
+        btn.classList.remove('on', 'mixed');
+        btn.title = 'Clip speed - select a clip first';
+        return;
+      }
+      const speeds = sel.map((c) => c.speed || 1);
+      const same = speeds.every((s) => Math.abs(s - speeds[0]) < 1e-6);
+      badge.textContent = same ? (Math.round(speeds[0] * 100) / 100) + 'x' : 'mix';
+      btn.classList.toggle('mixed', !same);
+      btn.classList.toggle('on', same && Math.abs(speeds[0] - 1) > 1e-6);
+      btn.title = same
+        ? 'Clip speed - ' + (Math.round(speeds[0] * 100) / 100) + 'x'
+        : 'Clip speed - mixed across ' + sel.length + ' clips';
     }
 
     _acc(label, hint) { return { label, hint, action: null }; }
-
     _fileMenu() {
       const items = [
         { label: 'New project', hint: 'Ctrl+N', action: () => this.newProject() },
@@ -623,9 +650,9 @@
         if (sel && q === 0.5) sel.value = '0.5';
         else if (sel && q === 0.25) sel.value = '0.25';
       });
-      this.events.on('selection-changed', () => { this._updateStatusRight(); this.refreshInspector(); });
-      this.events.on('project-loaded', () => { this._syncTransport(); this._updateTc(); this.timeline.zoomToFit(); });
-      this.commands.onchange.on('change', () => { this._updateStatusRight(); });
+      this.events.on('selection-changed', () => { this._updateStatusRight(); this.refreshInspector(); this._syncToolbar(); });
+      this.events.on('project-loaded', () => { this._syncTransport(); this._updateTc(); this.timeline.zoomToFit(); this._syncToolbar(); });
+      this.commands.onchange.on('change', () => { this._updateStatusRight(); this._syncToolbar(); });
     }
 
     /* ================= ui loop (meters + stats) ================= */
@@ -871,9 +898,35 @@
         if (typeof Blob !== 'undefined' && it instanceof Blob && it.name) { out.push(it); continue; }
         if (it && it.path && this.persist.native) {
           try {
-            const buf = await this.persist.native.readFile(it.path);
+            /* Prefer streaming via object URL so the browser fetches only the
+               header bytes for metadata probes. Fall back to readFile if
+               streaming isn't available. */
+            if (this.persist.native.streamUrl) {
+              const url = this.persist.native.streamUrl(it.path);
+              if (url) {
+                const name = it.name || String(it.path).split(/[\\/]/).pop();
+                const type = it.type || (typeof mimeForName === 'function' ? mimeForName(name) : 'application/octet-stream');
+                const resp = await fetch(url);
+                const blob = await resp.blob();
+                const file = new File([blob], name, { type: blob.type || type });
+                file._nativePath = it.path;
+                out.push(file);
+                continue;
+              }
+            }
+            const file = await this.persist.native.readFile(it.path);
+            if (file instanceof File) {
+              file._nativePath = file._nativePath || it.path;
+            } else if (file instanceof Blob) {
+              const name = it.name || String(it.path).split(/[\\/]/).pop();
+              const f = new File([file], name, { type: it.type || (typeof mimeForName === 'function' ? mimeForName(name) : 'application/octet-stream') });
+              f._nativePath = it.path;
+              out.push(f);
+              continue;
+            }
             const name = it.name || String(it.path).split(/[\\/]/).pop();
-            out.push(new File([buf], name, { type: it.type || mimeForName(name) }));
+            out.push(new File([file], name, { type: it.type || (typeof mimeForName === 'function' ? mimeForName(name) : 'application/octet-stream') }));
+            out[out.length - 1]._nativePath = it.path;
           } catch (e) { console.warn('[OpenScene] readFile failed', it.path, e); }
         }
       }
@@ -1236,6 +1289,61 @@
       this.exec(OS.commands.AddMarker(this.project, marker));
       this.timeline.requestRedraw();
       this.setStatus('Marker added at ' + OS.timebase.tc(frame, this.project.fps));
+    }
+
+    /* ================= clip speed ================= */
+
+    /* Ask for a speed and a retime mode, then apply both as one undoable edit.
+       Speed and length have to change together atomically: setting one without
+       the other would momentarily leave the clip claiming more source than it
+       has, and normalizeTransitions() would then trim it unpredictably. */
+    async changeClipSpeed(clips) {
+      const targets = (clips || this._sel()).filter((c) => !this._locked(c));
+      if (!targets.length) { this.dialogs.toast('Select a clip to change its speed', 'warn'); return; }
+
+      /* Generators have no source media, so length is not derived from speed. */
+      const timed = targets.filter((c) => !c.generator);
+      if (!timed.length) { this.dialogs.toast('That clip has no source media to retime', 'warn'); return; }
+
+      const answer = await this.dialogs.changeSpeed(
+        timed.map((c) => ({ clip: c, length: c.length })),
+        { fps: this.project.fps },
+      );
+      if (!answer) return;
+
+      const { speed, mode } = answer;
+      const edits = [];
+      for (const c of timed) {
+        const values = { speed };
+        if (mode === 'retime') {
+          /* Length follows speed so the same slice of source keeps playing.
+             The source frames in use are length * oldSpeed; new length is that
+             divided by the new speed. */
+          const srcLen = c.length * (c.speed || 1);
+          let len = Math.max(M().MIN_CLIP_FRAMES, Math.round(srcLen / speed));
+          /* Never claim more source than the asset actually has. */
+          if (c.assetId) {
+            const asset = M().findAsset(this.project, c.assetId);
+            if (asset && asset.durationFrames) {
+              const maxLen = Math.max(M().MIN_CLIP_FRAMES,
+                Math.round((asset.durationFrames - c.inPoint) / speed));
+              len = Math.min(len, maxLen);
+            }
+          }
+          values.length = len;
+        }
+        edits.push({ clip: c, values });
+      }
+
+      this.exec(OS.commands.SetClipProps(this.project, edits, {
+        name: speed === 1 ? 'Reset clip speed' : 'Clip speed ' + speed + 'x',
+      }), { refreshInspector: true });
+      this.timeline.requestRedraw();
+      this.player.requestRender();
+      this.setStatus(speed === 1
+        ? 'Clip speed reset to 1x'
+        : timed.length + (timed.length === 1 ? ' clip' : ' clips') + ' at ' + speed + 'x' +
+          (mode === 'retime' ? ', retimed' : ', length kept'));
     }
 
     /* ================= selection editing ================= */

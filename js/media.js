@@ -569,8 +569,20 @@
         meta.undecodable = true;
         meta.thumb = null;
       }
+      if (!meta.filePath && file && file._nativePath) meta.filePath = file._nativePath;
       const asset = M().createAsset(meta);
-      const rec = { asset, file, url: URL.createObjectURL(file), failed: !!meta.failed, kind };
+      /* For native-host streamed files, reuse the host-served URL instead of
+         creating another blob URL from a newly-fetched blob (which defeats
+         range requests and copies data). */
+      let recUrl = null;
+      if (asset.filePath && typeof window !== 'undefined' && window.openscene && window.openscene.streamUrl) {
+        try { const su = window.openscene.streamUrl(asset.filePath); if (su) recUrl = su; } catch (e) {}
+      } else if (file && file._nativePath && typeof window !== 'undefined' && window.openscene && window.openscene.streamUrl) {
+        try { const su = window.openscene.streamUrl(file._nativePath); if (su) recUrl = su; } catch (e) {}
+      }
+      const rec = { asset, file, url: recUrl || URL.createObjectURL(file), failed: !!meta.failed, kind };
+      if (file && file._nativePath) rec.nativePath = file._nativePath;
+      if (asset.filePath && !rec.nativePath) rec.nativePath = asset.filePath;
       if (kind === 'image') {
         const img = new Image();
         img.src = rec.url;
@@ -613,6 +625,21 @@
       const rec = this.records.get(asset.id) || this.registerExisting(asset);
       if (rec.file || !asset.fileKey) return rec;
       try {
+        /* Native host: reopen from original path if available. */
+        if (asset.filePath && typeof window !== 'undefined' && window.openscene && window.openscene.streamUrl) {
+          try {
+            const su = window.openscene.streamUrl(asset.filePath);
+            if (su) {
+              rec.url = su;
+              rec.nativePath = asset.filePath;
+              rec.missing = false;
+              asset.missing = false;
+              if (asset.kind === 'image') { const img = new Image(); img.src = su; rec.image = img; }
+              this.ensurePeaks(asset.id).then(() => OS.app && OS.app.events.emit('media-updated', asset)).catch(() => {});
+              return rec;
+            }
+          } catch (e) {}
+        }
         const file = await idbGet('files', asset.fileKey);
         if (!file) { asset.missing = true; rec.missing = true; return rec; }
         rec.file = file;

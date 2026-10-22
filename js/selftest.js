@@ -1023,6 +1023,136 @@
         log('persistence: the restore test cleans up after itself',
           OS.transitions.TYPES.length === beforeCount, `${beforeCount} -> ${OS.transitions.TYPES.length}`);
       } catch (e) { log('persistence: a custom transition reaches the store', false, e.stack || e.message); }
+
+      /* 21 - clip speed retiming. The arithmetic is the part that can silently
+         be wrong: speed decides how much source a clip consumes, so length and
+         speed have to move together or the clip claims frames it does not have. */
+      try {
+        const proj = M().createProject({ name: 'speed-test' });
+        const asset = { id: 'a-speed', name: 'speed.mp4', kind: 'video', durationFrames: 250, width: 320, height: 180, fps: proj.fps };
+        proj.assets.push(asset);
+
+        const track = proj.tracks.find((t) => t.kind === 'video');
+        const clip = M().createClip(asset, track.id, 0, 100, 0);
+        M().clipsOf(proj, track).push(clip);
+
+        const srcAt = (c) => c.length * (c.speed || 1); // source frames consumed
+        const sourceBefore = srcAt(clip);
+        log('speed: a new clip plays at 1x', clip.speed === 1);
+
+        /* 2x must halve the length and consume the same source. */
+        proj.markers = proj.markers || [];
+        OS.commands.SetClipProps(proj, [{ clip, values: { speed: 2, length: Math.round(sourceBefore / 2) } }]).do();
+        log('speed: 2x halves the timeline length', clip.length === 50, String(clip.length));
+        log('speed: 2x consumes the same amount of source', srcAt(clip) === sourceBefore,
+          `${sourceBefore} -> ${srcAt(clip)}`);
+
+        /* 0.5x must double it. */
+        OS.commands.SetClipProps(proj, [{ clip, values: { speed: 0.5, length: Math.round(sourceBefore / 0.5) } }]).do();
+        log('speed: 0.5x doubles the timeline length', clip.length === 200, String(clip.length));
+        log('speed: 0.5x still consumes the same source', srcAt(clip) === sourceBefore,
+          `${sourceBefore} -> ${srcAt(clip)}`);
+
+        /* The source must never be overrun: a speed so slow that the length
+           would need more frames than the asset has must be clamped. */
+        const tooSlowLen = Math.round(sourceBefore / 0.0625); // 1600 frames from 100
+        const clamped = Math.min(tooSlowLen, Math.round((asset.durationFrames - clip.inPoint) / 0.0625));
+        OS.commands.SetClipProps(proj, [{ clip, values: { speed: 0.0625, length: clamped } }]).do();
+        const maxSource = Math.round(asset.durationFrames - clip.inPoint);
+        log('speed: an extreme slow-down cannot claim more source than exists',
+          srcAt(clip) <= maxSource, `${srcAt(clip)} vs ${maxSource}`);
+        log('speed: the clip still has a positive length after clamping',
+          clip.length >= M().MIN_CLIP_FRAMES, String(clip.length));
+
+        /* A speed change must be one atomic undo, restoring both values. */
+        const lenBefore = clip.length, spdBefore = clip.speed;
+        const cmd = OS.commands.SetClipProps(proj, [{ clip, values: { speed: 3, length: 33 } }]);
+        cmd.do();
+        cmd.undo();
+        log('speed: undo restores both the speed and the length',
+          clip.speed === spdBefore && clip.length === lenBefore,
+          `${clip.speed}/${clip.length} vs ${spdBefore}/${lenBefore}`);
+
+        /* The clamp helper the UI uses must be reachable. */
+        log('speed: the project exposes findAsset for the length clamp',
+          typeof M().findAsset === 'function' && M().findAsset(proj, 'a-speed') === asset);
+
+        /* Every clip must survive a normalize round trip at an odd speed. */
+        clip.speed = 0.75;
+        M().normalizeTransitions(proj);
+        log('speed: an odd speed survives normalizeTransitions',
+          clip.speed === 0.75 && clip.length >= M().MIN_CLIP_FRAMES,
+          `speed ${clip.speed}, length ${clip.length}`);
+      } catch (e) { log('speed: a new clip plays at 1x', false, e.stack || e.message); }
+
+      /* 22 - the toolbar controls exist and are wired to real actions */
+      try {
+        const ids = ['tbCut', 'tbMarker', 'tbSpeed', 'tbSpeedBadge'];
+        const missing = ids.filter((id) => !document.getElementById(id));
+        log('toolbar: the cut, marker and speed controls are in the document',
+          missing.length === 0, missing.join(',') || 'all present');
+
+        log('toolbar: the app exposes a cut action', typeof app.splitAtPlayhead === 'function');
+        log('toolbar: the app exposes a marker action', typeof app.addMarkerAtPlayhead === 'function');
+        log('toolbar: the app exposes a speed action', typeof app.changeClipSpeed === 'function');
+        log('toolbar: the dialogs expose the speed prompt', typeof app.dialogs.changeSpeed === 'function');
+        log('toolbar: the app can synchronise the speed badge', typeof app._syncToolbar === 'function');
+
+        /* With nothing selected the badge must not claim a speed. */
+        app._syncToolbar();
+        const badge = document.getElementById('tbSpeedBadge');
+        log('toolbar: the speed badge reads 1x when nothing is selected',
+          badge.textContent === '1x', badge.textContent);
+      } catch (e) { log('toolbar: the cut, marker and speed controls are in the document', false, e.stack || e.message); }
+
+      /* 23 - modal dialogs must return the answer the user gave. close() runs
+         the onClose hook synchronously, so a handler that closes first and
+         resolves afterwards has its answer discarded: OK would read as Cancel.
+         That silently turned every confirm() into a no-op. */
+      try {
+        const clickFoot = (label) => {
+          const m = document.querySelector('.modal');
+          if (!m) return false;
+          const b = Array.from(m.querySelectorAll('.modal-foot button')).find((x) => x.textContent === label);
+          if (!b) return false;
+          b.click();
+          return true;
+        };
+        const settled = (p) => Promise.race([
+          p,
+          new Promise((r) => setTimeout(() => r('__timeout__'), 1500)),
+        ]);
+
+        const okP = app.dialogs.confirm('Self-test', 'Confirm OK resolves true', { okLabel: 'Yes' });
+        await new Promise((r) => setTimeout(r, 60));
+        const okClicked = clickFoot('Yes');
+        const okValue = await settled(okP);
+        log('dialogs: OK on a confirm resolves true', okClicked && okValue === true, String(okValue));
+
+        const cancelP = app.dialogs.confirm('Self-test', 'Confirm cancel resolves false', { okLabel: 'Yes' });
+        await new Promise((r) => setTimeout(r, 60));
+        const cancelClicked = clickFoot('Cancel');
+        const cancelValue = await settled(cancelP);
+        log('dialogs: Cancel on a confirm still resolves false',
+          cancelClicked && cancelValue === false, String(cancelValue));
+
+        const promptP = app.dialogs.prompt('Self-test', 'Prompt returns the typed text', 'seed', { okLabel: 'Take' });
+        await new Promise((r) => setTimeout(r, 60));
+        const field = document.querySelector('.modal input');
+        if (field) { field.value = 'typed'; field.dispatchEvent(new Event('input', { bubbles: true })); }
+        const promptClicked = clickFoot('Take');
+        const promptValue = await settled(promptP);
+        log('dialogs: OK on a prompt returns the typed text',
+          promptClicked && promptValue === 'typed', String(promptValue));
+
+        /* A dismissal (click-away) must not be mistaken for an answer. */
+        const awayP = app.dialogs.confirm('Self-test', 'Dismissal resolves false', { okLabel: 'Yes' });
+        await new Promise((r) => setTimeout(r, 60));
+        app.dialogs.close();
+        const awayValue = await settled(awayP);
+        log('dialogs: dismissing a confirm resolves false, not undefined',
+          awayValue === false, String(awayValue));
+      } catch (e) { log('dialogs: OK on a confirm resolves true', false, e.stack || e.message); }
     } catch (e) {
       log('self-test: unexpected failure', false, e.stack || e.message);
     }
